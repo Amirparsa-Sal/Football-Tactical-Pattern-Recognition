@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 from tqdm import tqdm
+import numpy as np
 
 class PhaseExtractor:
     DELAY_EVENTS = ['foul won', 'foul committed', 'injury stoppage', 'referee ball-drop', 'half end', 'half start']
