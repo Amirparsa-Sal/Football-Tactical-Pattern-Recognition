@@ -94,10 +94,19 @@ class PhaseExtractor:
         result_df.to_csv(os.path.join(output_dir, f'{team_name}.csv'), index=False)
     
             
-            
-            
 
-            
+def split_locations(df, location_columns):
+    new_df = df.copy()
+    for column in location_columns:
+        index = new_df.columns.get_loc(column)
+        new_df.inset(index + 1, f'{column}_x')
+        new_df.inset(index + 2, f'{column}_y')
+        for i in range(len(df)):
+            x, y = new_df.iloc[i][column][1:-1].replace(' ', '').split(',')
+            new_df.iloc[i, f'{column}_x'] = float(x)
+            new_df.iloc[i, f'{column}_y'] = float(y)
+        new_df.drop(column, inplace=True)
+    return new_df
                 
 
 
