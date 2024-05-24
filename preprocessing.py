@@ -51,7 +51,6 @@ class PhaseExtractor:
             if result_df is None:
                 result_df = pd.DataFrame(None, columns=match_df.columns)
                 result_df = result_df.assign(phase_id=None)
-                print(result_df)
 
             # delete rows if their event is in ignore_events
             match_df = match_df[~match_df['type'].str.lower().isin(PhaseExtractor.IGNORE_EVENTS)]
@@ -67,10 +66,12 @@ class PhaseExtractor:
 
                 if team != team_name or event in PhaseExtractor.LOSING_BALL_EVENTS or event in PhaseExtractor.DELAY_EVENTS:
                     # Extract the series
-                    phase_df = match_df.iloc[start_index:current_index]
-                    phase_df = phase_df.assign(phase_id=phase_id)
-                    phase_id += 1
-                    result_df = pd.concat((result_df, phase_df))
+                    if start_index != current_index:
+                        phase_df = match_df.iloc[start_index:current_index]
+                        phase_df = phase_df.assign(phase_id=phase_id)
+                        phase_id += 1
+                        result_df = pd.concat((result_df, phase_df))
+
                     # clear the current series
                     start_index = self.__find_next_event(match_df, current_index + 1, team_name)
                     current_index = start_index
@@ -79,12 +80,6 @@ class PhaseExtractor:
                 elif event in PhaseExtractor.HAVING_BALL_EVENTS:
                     # add the event to the current series
                     current_index += 1
-                    # if the event is shot extract the series
-                    # if event == 'shot':
-                    #     result_df = pd.concat((result_df, match_df.iloc[start_index:current_index]))
-                    #     phases_ranges.append(current_index - start_index)
-                    #     start_index = self.__find_next_event(match_df, current_index, team_name)
-                    #     current_index = start_index
 
                 else:                    
                     raise NotImplementedError(f'This type of event ({event}) is not implemented! (Index: {match_df.iloc[current_index]["index"]}, file: {df_dir})')
@@ -110,8 +105,16 @@ def split_locations(df, location_columns):
         new_df.drop(column, axis = 1, inplace=True)
     return new_df
                 
-
-
-
-
-
+def filter_static_movements(df):
+    new_df = df.copy()
+    new_df.insert(len(df.columns), 'keep', True)
+    location = None
+    for i in range(len(df)):
+        row = df.iloc[i]
+        new_location = row['location']
+        if row['type'] == 'Ball Receipt*':
+            if location == new_location or (i < len(df) - 1 and df.iloc[i + 1]['location'] == new_location):
+                new_df.iat[i, len(df.columns)] = False
+        elif row['type'] == 'Carry' and new_location == row['carry_end_location']:
+            new_df.iat[i, len(df.columns)] = False
+    return df[new_df['keep']]
