@@ -83,38 +83,48 @@ class PhaseExtractor:
 
                 else:                    
                     raise NotImplementedError(f'This type of event ({event}) is not implemented! (Index: {match_df.iloc[current_index]["index"]}, file: {df_dir})')
-
-
-        # print(result_df)
+                
         result_df=result_df.reset_index(drop=True)
         result_df.to_csv(os.path.join(output_dir, f'{team_name}.csv'), index=False)
     
             
 
 def split_locations(df, location_columns):
+    '''A function to split x and y axis of location columns (location, pass_end_location, carry_end_location)'''
     new_df = df.copy()
+    # loop over specified columns
     for column in location_columns:
+        # Add two new columns for x and y axis
         index = new_df.columns.get_loc(column)
         new_df.insert(index + 1, f'{column}_x', 0)
         new_df.insert(index + 2, f'{column}_y', 0)
+        # set dtype of columns to np.float64
         new_df = new_df.astype({f'{column}_x': np.float64, f'{column}_y': np.float64})
+        # loop over the entire df
         for i in range(len(df)):
+            # set the value of x and y columns
             x, y = new_df.iloc[i][column][1:-1].replace(' ', '').split(',')
             new_df.iat[i, index + 1] = float(x)
             new_df.iat[i, index + 2] = float(y)
+        # drop the specified column
         new_df.drop(column, axis = 1, inplace=True)
     return new_df
                 
 def filter_static_movements(df):
+    '''A function to remove static events (the events starting and ending at the same location)'''
     new_df = df.copy()
     new_df.insert(len(df.columns), 'keep', True)
     location = None
+    # loop over the entire df
     for i in range(len(df)):
         row = df.iloc[i]
         new_location = row['location']
+        # if the event is ball receipt
         if row['type'] == 'Ball Receipt*':
+            # drop if the ending location is as same as the starting location or the location is as same as the next event's location
             if location == new_location or (i < len(df) - 1 and df.iloc[i + 1]['location'] == new_location):
                 new_df.iat[i, len(df.columns)] = False
+        # drop if the event is carry and the ending location is as same as the starting location
         elif row['type'] == 'Carry' and new_location == row['carry_end_location']:
             new_df.iat[i, len(df.columns)] = False
     return df[new_df['keep']]
