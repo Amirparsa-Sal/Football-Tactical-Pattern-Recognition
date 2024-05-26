@@ -1,5 +1,5 @@
 import pandas as pd
-from preprocessing import PhaseExtractor
+from ftpr.preprocessing import PhaseExtractor
 
 team_name = 'Manchester City'
 
