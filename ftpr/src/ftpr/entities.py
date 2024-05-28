@@ -37,7 +37,7 @@ class Phase:
             for i in range(len(self._df)):
                 # set the value of x and y columns
                 if not pd.isna(new_df.iloc[i][column]):
-                    x, y = new_df.iloc[i][column][1:-1].replace(' ', '').split(',')
+                    x, y = new_df.iloc[i][column][1:-1].replace(' ', '').split(',')[:2]
                     new_df.iat[i, index + 1] = float(x)
                     new_df.iat[i, index + 2] = float(y)
                 else:
@@ -73,10 +73,10 @@ class Phase:
                 result.append(arr[i].tolist())
         return result
             
-    def get_location_series(self, location_columns, remove_duplicates=False, splitted_locations=False):
+    def get_location_series(self, location_columns, remove_duplicates=False):
         result = np.zeros((len(self._df), len(location_columns) * 2))
         # if the location is splitted convert the columns to numpy array and concatenate them
-        if splitted_locations:
+        if self.is_splited():
             for i, col in enumerate(location_columns):
                 result[:, i * 2] = np.array(self._df[f'{col}_x'])
                 result[:, i * 2 + 1] = np.array(self._df[f'{col}_y'])
@@ -89,10 +89,12 @@ class Phase:
                     result[i, j * 2 + 1] = y
         return self.__remove_duplicate_locations(result) if remove_duplicates else result
 
-    def get_summary(self, splitted_location=False):
+    def get_summary(self):
         columns = ['location', 'pass_end_location', 'carry_end_location']
+        if 'Shot' in self._df['type']:
+            columns.append('shot_end_location')
         new_columns = []
-        if splitted_location:
+        if self.is_splited():
             for col in columns:
                 new_columns.append(f'{col}_x')
                 new_columns.append(f'{col}_y')
@@ -100,6 +102,14 @@ class Phase:
             new_columns = columns    
         new_columns.extend(['type', 'timestamp'])
         return self._df[new_columns]
+    
+    def is_splited(self):
+        return 'location_x' in self._df.columns
+
+    def get_location(self, i):
+        if self.is_splited():
+            return self._df.iloc[i]['location_x'], self._df.iloc[i]['location_y']
+        return self._df.iloc[i]['location'][1:-1].replace(' ', '').split(',')
     
     def __getitem__(self, key):
         return self._df[key]

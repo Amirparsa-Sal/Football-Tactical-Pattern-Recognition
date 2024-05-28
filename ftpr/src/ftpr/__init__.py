@@ -1,1 +1,1 @@
-__all__ = ['entities', 'preprocessing']
+__all__ = ['entities', 'preprocessing', 'visualization']
