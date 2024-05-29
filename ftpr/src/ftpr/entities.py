@@ -3,16 +3,23 @@ import pandas as pd
 
 class Phase:
 
-    def __init__(self, df, id_column='phase_id') -> None:
+    def __init__(self, df: pd.DataFrame, id_column='phase_id') -> None:
         self.id = df[id_column]
         self.id_column = id_column
         self._df = df
         self.iloc = df.iloc
+        self.__drop_nan()
 
     @property
     def df(self):
         return self._df
     
+    def __drop_nan(self):
+        if self.is_splited():
+            self._df = self._df[self._df['location_x'].notna() & self._df['location_y'].notna()]
+        else:
+            self._df = self._df[self._df['location'].notna()]
+
     @df.setter
     def df(self, df):
         if not isinstance(df, pd.DataFrame):
@@ -49,21 +56,32 @@ class Phase:
                 
     def filter_static_events(self):
         '''A function to remove static events (the events starting and ending at the same location)'''
+        if len(self._df) == 0:
+            return self
         new_df = self._df.copy()
         new_df.insert(len(self._df.columns), 'keep', True)
         location = None
-        # loop over the entire df
-        for i in range(len(self._df)):
+        # loop over the entire df except the last event
+        for i in range(len(self._df) - 1):
             row = self._df.iloc[i]
-            new_location = row['location']
+            new_location = self.get_location(i)
             # if the event is ball receipt
             if row['type'] == 'Ball Receipt*':
                 # drop if the ending location is as same as the starting location or the location is as same as the next event's location
-                if location == new_location or (i < len(self._df) - 1 and self._df.iloc[i + 1]['location'] == new_location):
+                if location == new_location or (i < len(self._df) - 1 and self.get_location(i + 1) == new_location):
                     new_df.iat[i, len(self._df.columns)] = False
             # drop if the event is carry and the ending location is as same as the starting location
-            elif row['type'] == 'Carry' and new_location == row['carry_end_location']:
+            elif row['type'] == 'Carry' and new_location == self.get_location(i, 'Carry'):
                 new_df.iat[i, len(self._df.columns)] = False
+        # if the last event is ball receipt and its location is different from the last end location: remove it
+        if len(self._df) == 1:
+            new_df.iat[0, len(self._df.columns)] = True
+        else:
+            last_event = self._df.iloc[-2]['type']
+            if self._df.iloc[-1]['type'] == 'Ball Receipt*' and self.get_location(-2, last_event) != self.get_location(-1):
+                new_df.iat[-1, len(self._df.columns)] = False
+            else:
+                new_df.iat[-1, len(self._df.columns)] = True
         return Phase(self._df[new_df['keep']], self.id_column)
 
     def __remove_duplicate_locations(self, arr):
@@ -106,10 +124,12 @@ class Phase:
     def is_splited(self):
         return 'location_x' in self._df.columns
 
-    def get_location(self, i):
+    def get_location(self, i, event=None):
+        i = i % len(self._df)
+        col = f'{event.lower()}_end_location' if event else 'location'
         if self.is_splited():
-            return self._df.iloc[i]['location_x'], self._df.iloc[i]['location_y']
-        return self._df.iloc[i]['location'][1:-1].replace(' ', '').split(',')
+            return self._df.iloc[i][f'{col}_x'], self._df.iloc[i][f'{col}_y']
+        return self._df.iloc[i][col][1:-1].replace(' ', '').split(',')
     
     def __getitem__(self, key):
         return self._df[key]
