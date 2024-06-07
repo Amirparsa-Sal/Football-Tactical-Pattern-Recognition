@@ -52,8 +52,8 @@ class PhaseExtractor:
             # Find the first event related to the team
             start_index = self.__find_next_event(match_df, 2, team_name)
             current_index = start_index
-
-            while start_index < len(match_df):
+    
+            while current_index < len(match_df):
                 event = match_df.iloc[current_index]['type'].lower()
                 team =  match_df.iloc[current_index]['team']
                 # if the event is in having_ball_events
@@ -77,7 +77,7 @@ class PhaseExtractor:
 
                 else:                    
                     raise NotImplementedError(f'This type of event ({event}) is not implemented! (Index: {match_df.iloc[current_index]["index"]}, file: {df_dir})')
-                
+
         result_df=result_df.reset_index(drop=True)
 
         if output_dir:
