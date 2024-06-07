@@ -1,10 +1,15 @@
 import pandas as pd
 from ftpr.preprocessing import PhaseExtractor
-
-team_name = 'Manchester City'
+import os
 
 matches_df = pd.read_csv('./data/matches.csv')
 
+teams = set(matches_df['home_team'])
+
 ext = PhaseExtractor(matches_df, './data/events_simplified')
 
-ext.extract_phases(team_name, output_dir='./data/team_phases')
+for team in teams:
+    if os.path.exists(f'./data/team_phases/{team}.csv'):
+        print(team, 'Passed!')
+    print(f'Extracting {team} data...')
+    ext.extract_phases(team, output_dir='./data/team_phases')
