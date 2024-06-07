@@ -54,11 +54,11 @@ class PhaseClustering:
             clustering = AgglomerativeClustering(n_clusters=n_clusters, metric='precomputed', linkage=linkage, compute_full_tree=True)
             clustering.fit_predict(distances)
 
-        
         elif metric == 'euclidean':
-            series = to_time_series_dataset(self.series)
+            series = self._to_time_series_dataset(self.series)
+            series = series.reshape(len(series), -1)
             clustering = AgglomerativeClustering(n_clusters=n_clusters, metric=metric, linkage=linkage, compute_full_tree=True)
-            clustering.fit_predict()
+            clustering.fit_predict(series)
 
         elif metric == 'custom':
             distances = np.zeros((len(self.series), len(self.series)), dtype=np.float64)
@@ -81,3 +81,23 @@ class PhaseClustering:
     def get_cluster_series(self, cluster_id):
         self._check_done()
         return [serie for i, serie in enumerate(self.series) if self.labels_[i] == cluster_id]
+
+
+    def _to_time_series_dataset(self, dataset):
+        if len(dataset) == 0:
+            raise ValueError('Dataset must not be empty!')
+        
+        n_features = len(dataset[0][0])
+        max_length = -1
+        for series in dataset:
+            if len(series) > max_length:
+                max_length = len(series)
+
+        result = np.zeros((len(dataset), max_length, n_features))
+        npad = [(0, 0)] * np.array(dataset[0]).ndim
+        for i, series in enumerate(dataset):
+            npad[0] = (0, max_length - len(series))
+            padded_series = np.pad(series, pad_width=npad, mode='edge')
+            result[i] = padded_series
+        
+        return result
