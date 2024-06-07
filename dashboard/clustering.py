@@ -42,16 +42,17 @@ def on_prev_button_clicked():
 def on_next_button_clicked():
     st.session_state['batch'] = st.session_state['batch'] + 1
 
-@st.cache_data(max_entries=1)
-def perform_clustering(team_name, n_clusters, min_phase_length=3):
+@st.cache_data(max_entries=2)
+def perform_clustering(team_name, n_clusters, min_phase_length, metric):
+    print(metric)
     df = pd.read_csv(f'../data/team_phases/{team_name}.csv')
 
     phases = load_phases(df, filter_static_events=True, min_phase_length=min_phase_length, n_jobs=5)
 
     clustering = PhaseClustering(phases)
-    clustering.set_hash(f'{team_name}-Agglo-{min_phase_length}')
+    clustering.set_hash(f'{team_name}-Agglo-{min_phase_length}-{metric}')
 
-    cls_pred = clustering.agglomerative_fit(n_clusters=n_clusters, metric='dtw', linkage='complete')
+    cls_pred = clustering.agglomerative_fit(n_clusters=n_clusters, metric=metric, linkage='complete')
 
     cluster_score = [0 for _ in range(n_clusters)]
     cluster_dist = []
@@ -85,6 +86,9 @@ if team_name:
     st.sidebar.markdown('## Min Length')
     min_phase_length = st.sidebar.slider('Min Length', 1, 10, value=3)
 
+    st.sidebar.markdown('## Metric')
+    metric = st.sidebar.selectbox('Metric', ['dtw', 'euclidean'])
+
     num_batches = int((n_clusters / num_rows / num_cols) - 0.5) + 1
 
     if 'batch' in st.session_state:
@@ -95,7 +99,7 @@ if team_name:
 
     # Clustering
 
-    clustering, cls_pred, cluster_score, best_cluster_indeces = perform_clustering(team_name, n_clusters, min_phase_length)
+    clustering, cls_pred, cluster_score, best_cluster_indeces = perform_clustering(team_name, n_clusters, min_phase_length, metric)
     
     batch_progress = st.progress((batch + 1) / num_batches, text = f'Cluster {batch + 1} / {num_batches}')
     loading_progress = st.progress(0, text = f'Loading Batch (0 / {num_cols * num_rows})...')
