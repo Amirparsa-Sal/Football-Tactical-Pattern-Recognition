@@ -14,6 +14,9 @@ class Phase:
     def df(self):
         return self._df
     
+    def __reduce__(self):
+        return (Phase, (self._df, self.id_column))
+    
     def __drop_nan(self):
         if self.is_splited():
             self._df = self._df[self._df['location_x'].notna() & self._df['location_y'].notna()]
