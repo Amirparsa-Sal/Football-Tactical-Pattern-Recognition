@@ -36,18 +36,7 @@ class PhaseVisualizer:
                             df[f'{event_type.lower()}_end_location_y'], label=f'{event_type.capitalize()} Path',
                         color=color, ax=ax, width=3)
 
-    def plot_phase(self, phase: Phase, events_config):
-        # pitch = Pitch(pitch_type=self.pitch_type, pitch_color=self.pitch_color, line_color=self.line_color)
-        # fig, ax = pitch.draw(self.figsize, constrained_layout=self.constrained_layout, tight_layout=self.tight_layout)
-        # fig.set_facecolor(self.face_color)
-        if not phase.is_splited():
-            raise ValueError('Phase must be splited before being visualized!')
-        
-        pitch = Pitch(pitch_type='statsbomb', pitch_color='#22312b', line_color='#c7d5cc')
-        fig, ax = pitch.draw(figsize=(16, 11), constrained_layout=False, tight_layout=True)
-        fig.set_facecolor('#22312b')
-
-
+    def add_phase(self, pitch, ax, phase, events_config):
         event_types = phase['type'].unique()
         for et in event_types:
             df_event = phase[phase['type'] == et]
@@ -74,5 +63,16 @@ class PhaseVisualizer:
             location_x, location_y =  new_location_x, new_location_y
         
         ax.legend(loc='upper left', labelspacing=1.5)
+        return ax
+
+    def plot_phase(self, phase: Phase, events_config):
+        if not phase.is_splited():
+            raise ValueError('Phase must be splited before being visualized!')
+        
+        pitch = Pitch(pitch_type='statsbomb', pitch_color='#22312b', line_color='#c7d5cc')
+        fig, ax = pitch.draw(figsize=(16, 11), constrained_layout=False, tight_layout=True)
+        fig.set_facecolor('#22312b')
+
+        ax = self.add_phase(pitch, ax, phase, events_config)
 
         return fig, ax
