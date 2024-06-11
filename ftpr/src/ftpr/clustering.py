@@ -2,7 +2,7 @@ from .entities import Phase
 from typing import List
 import numpy as np
 from dtaidistance import dtw_ndim
-from tslearn.utils import to_time_series_dataset
+from dtaidistance.clustering.kmeans import KMeans
 from sklearn.cluster import AgglomerativeClustering
 
 class PhaseClustering:
@@ -74,6 +74,21 @@ class PhaseClustering:
         self.done = True
         return self.labels_
     
+    def kmeans_fit(self, n_clusters, metric, **kwargs):
+        # Validate the arguments
+        self._check_metric(metric)
+
+        clustering = KMeans(n_clusters, **kwargs)
+        cls_pred, _ = clustering.fit(self.series, use_c=True)
+        
+        self.labels_ = [0 for _ in range(len(self.series))]
+        for cluster_id in cls_pred:
+            for phase_id in cls_pred[cluster_id]:
+                self.labels_[phase_id] = cluster_id
+
+        self.done = True
+        return self.labels_, clustering
+
     def get_cluster_phases(self, cluster_id):
         self._check_done()
         return [phase for i, phase in enumerate(self.phases) if self.labels_[i] == cluster_id]
