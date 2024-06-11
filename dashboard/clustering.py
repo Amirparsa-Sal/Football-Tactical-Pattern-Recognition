@@ -7,8 +7,7 @@ from ftpr.clustering import PhaseClustering
 from ftpr.dataloader import load_phases
 from collections import Counter
 import streamlit as st
-import threading
-
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 num_cols = 3
 num_rows = 4
 
@@ -32,27 +31,34 @@ def plot_cluster(clustering: PhaseClustering, cluster_index: int):
     
     return fig, len(series_in_cluster)
 
-def fill_col(col, fig):
-    with col:
-        st.pyplot(fig)
-
 def on_prev_button_clicked():
     st.session_state['batch'] = st.session_state['batch'] - 1
 
 def on_next_button_clicked():
     st.session_state['batch'] = st.session_state['batch'] + 1
 
-@st.cache_data(max_entries=2)
-def perform_clustering(team_name, n_clusters, min_phase_length, metric):
-    print(metric)
-    df = pd.read_csv(f'../data/team_phases/{team_name}.csv')
+@st.cache_data(max_entries=1)
+def load_csv(dir):
+    return pd.read_csv(dir)
 
-    phases = load_phases(df, filter_static_events=True, min_phase_length=min_phase_length, n_jobs=5)
+@st.cache_data(max_entries=1)
+def load_team_phases(team, _df, filter_static_events=True, min_phase_length=3, n_jobs=5):
+    return load_phases(_df, filter_static_events=filter_static_events, min_phase_length=min_phase_length, n_jobs=n_jobs)
+
+@st.cache_data(max_entries=2)
+def perform_clustering(type, team_name, n_clusters, min_phase_length, metric):
+    df = load_csv(f'../data/team_phases/{team_name}.csv')
+
+    phases = load_team_phases(team_name, df, filter_static_events=True, min_phase_length=min_phase_length, n_jobs=5)
 
     clustering = PhaseClustering(phases)
-    clustering.set_hash(f'{team_name}-Agglo-{min_phase_length}-{metric}')
+    clustering.set_hash(f'{team_name}-{type}-{min_phase_length}-{metric}')
 
-    cls_pred = clustering.agglomerative_fit(n_clusters=n_clusters, metric=metric, linkage='complete')
+    cls_pred = None
+    if type == 'Agglomerative':
+        cls_pred = clustering.agglomerative_fit(n_clusters, metric, linkage='complete')
+    else:
+        cls_pred = clustering.kmeans_fit(n_clusters, metric, show_progress=False)
 
     cluster_score = [0 for _ in range(n_clusters)]
     cluster_dist = []
@@ -80,6 +86,9 @@ st.sidebar.markdown('## Select a team')
 team_name = st.sidebar.selectbox('Choose', [''] + all_teams)
 
 if team_name:
+    st.sidebar.markdown('## Clustering Type')
+    type = st.sidebar.selectbox('Clustering Type', ['Agglomerative', 'K-means'])
+
     st.sidebar.markdown('## Num Clusters')
     n_clusters = st.sidebar.slider('Num Clusters', 2, 200, value=100)
 
@@ -87,7 +96,8 @@ if team_name:
     min_phase_length = st.sidebar.slider('Min Length', 1, 10, value=3)
 
     st.sidebar.markdown('## Metric')
-    metric = st.sidebar.selectbox('Metric', ['dtw', 'euclidean'])
+    metric = st.sidebar.selectbox('Metric', ['dtw', 'softdtw', 'euclidean'])
+
 
     num_batches = int((n_clusters / num_rows / num_cols) - 0.5) + 1
 
@@ -99,12 +109,12 @@ if team_name:
 
     # Clustering
 
-    clustering, cls_pred, cluster_score, best_cluster_indeces = perform_clustering(team_name, n_clusters, min_phase_length, metric)
+    clustering, cls_pred, cluster_score, best_cluster_indeces = perform_clustering(type, team_name, n_clusters, min_phase_length, metric)
     
     batch_progress = st.progress((batch + 1) / num_batches, text = f'Cluster {batch + 1} / {num_batches}')
     loading_progress = st.progress(0, text = f'Loading Batch (0 / {num_cols * num_rows})...')
     cols = st.columns([1] +  (num_cols * [10]) + [1])
-
+    
     with cols[0]:
         prev_button = st.button('<', use_container_width=True, disabled=False, on_click=on_prev_button_clicked)
         
@@ -114,7 +124,6 @@ if team_name:
 
     figs = dict()
     for j in range(num_rows):
-        figs[j] = dict()
         for i in range(1, 1 + num_cols):
             with cols[i]:        
                 index = batch * num_rows * num_cols + j * num_cols + (i - 1)
@@ -122,13 +131,5 @@ if team_name:
                     fig, num_phases = plot_cluster(clustering, index)
                     st.markdown(f'Num Phases: {num_phases}, Num Shots: {cluster_score[best_cluster_indeces[index]]}')
                     st.pyplot(fig)
-                    # figs[j][i] = {'fig': fig, 'num_phases': num_phases, 'num_shots': cluster_score[best_cluster_indeces[index]]}
                 loading_progress.progress((j * num_cols + i) / (num_rows * num_cols))
-    
-    # for j in range(num_rows):
-    #     for i in range(1, 1 + num_cols):
-    #         with cols[i]:                
-    #             st.markdown(f'Num Phases: {figs[j][i]["num_phases"]}, Num Shots: {figs[j][i]["num_shots"]}')
-    #             st.pyplot(figs[j][i]['fig'])
-    
-    
+    loading_progress.empty()
