@@ -77,13 +77,13 @@ if __name__ == '__main__':
         for n_clusters in range(args.start, args.end + 1, args.step):
             print(f'Starting with {n_clusters} clusters...')
             cls_pred, clustering = phase_clustering.kmeans_fit(n_clusters=n_clusters, metric=args.metric, monitor_distances=monitor_distance, show_progress=True)    
-            silhouettes.append(silhouette_score(distances, cls_pred))
+            silhouettes.append(silhouette_score(distances, cls_pred, metric='precomputed'))
             clusterings.append(clustering)
             
     else:
         for n_clusters in tqdm(range(args.start, args.end + 1, args.step)):
             cls_pred, clustering = phase_clustering.agglomerative_fit(n_clusters=n_clusters, metric=args.metric)  
-            silhouettes.append(silhouette_score(distances, cls_pred))
+            silhouettes.append(silhouette_score(distances, cls_pred, metric='precomputed'))
             clusterings.append(clustering)
     
     
