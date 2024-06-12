@@ -61,13 +61,13 @@ class PhaseClustering:
         if metric == 'dtw':
             distances = dtw_ndim.distance_matrix_fast(series)
             clustering = AgglomerativeClustering(n_clusters=n_clusters, metric='precomputed', linkage=linkage, compute_full_tree=True)
-            clustering.fit_predict(distances)
+            self.labels_ = clustering.fit_predict(distances)
 
         elif metric == 'euclidean':
             series = self._to_time_series_dataset(series)
             series = series.reshape(len(series), -1)
             clustering = AgglomerativeClustering(n_clusters=n_clusters, metric=metric, linkage=linkage, compute_full_tree=True)
-            clustering.fit_predict(series)
+            self.labels_ = clustering.fit_predict(series)
 
         elif metric == 'custom':
             distances = np.zeros((len(series), len(series)), dtype=np.float64)
@@ -77,11 +77,10 @@ class PhaseClustering:
                     distances[i, j] = dist
                     distances[j, i] = dist
             clustering = AgglomerativeClustering(n_clusters=n_clusters, metric='precomputed', linkage=linkage, compute_full_tree=True)
-            clustering.fit_predict(distances)
+            self.labels_ = clustering.fit_predict(distances)
         
-        self.labels_ = clustering.labels_
         self.done = True
-        return self.labels_
+        return self.labels_, clustering
     
     def kmeans_fit(self, n_clusters, metric, monitor_distances=None, **kwargs):
         # Validate the arguments
