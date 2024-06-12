@@ -1,6 +1,8 @@
 import pandas as pd
 import os
 from tqdm import tqdm
+import numpy as np
+from copy import deepcopy
 
 class PhaseExtractor:
     DELAY_EVENTS = ['foul won', 'foul committed', 'injury stoppage', 'referee ball-drop', 'half end', 'half start']
@@ -88,3 +90,21 @@ class PhaseExtractor:
             result_df.to_csv(os.path.join(output_dir, f'{team_name}.csv'), index=False)
         
         return result_df
+
+def normalize(dataset):
+    assert len(dataset) > 0
+    n_features = dataset[0].shape[1]
+    for series in dataset:
+        assert series.shape[1] == n_features
+    ds = deepcopy(dataset)
+    # Computing max and min
+    max_features = np.array([float('-inf') for _ in range(n_features)])
+    min_features = np.array([float('inf') for _ in range(n_features)])
+    for serie in ds:
+        max_features = np.maximum(max_features, np.max(serie, axis=0))
+        min_features = np.minimum(min_features, np.min(serie, axis=0))
+    
+    # Normalizing the series
+    for i, serie in enumerate(ds):
+        ds[i] = (serie - min_features) / (max_features - min_features)
+    return ds

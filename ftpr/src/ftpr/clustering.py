@@ -1,4 +1,5 @@
 from .entities import Phase
+from .preprocessing import normalize
 from typing import List
 import numpy as np
 from dtaidistance import dtw_ndim
@@ -10,14 +11,21 @@ class PhaseClustering:
     SUPPORTED_METRICS = {'dtw', 'softdtw', 'euclidean', 'custom'}
     SUPPORTED_LINKAGES = {'ward', 'complete', 'average', 'single'}
 
-    def __init__(self, phases: List[Phase], location_column='location', remove_duplicates=True) -> None:
+    def __init__(self, phases: List[Phase], location_column='location', remove_duplicates=True, normalize_series=True) -> None:
         self.phases = phases
-        self.series = []
-        for phase in phases:
-            s = phase.get_location_series(location_columns=[location_column], remove_duplicates=remove_duplicates)
-            self.series.append(np.array(s))
+        self.series = self._phase_to_series(phases, location_column, remove_duplicates)
+        if normalize_series:
+            self.normalized_series = normalize(self.series)
+        self.normalized = normalize_series
         self.done = False
         self.hash = None
+    
+    def _phase_to_series(self, phases, location_column, remove_duplicates):
+        series = []
+        for phase in phases:
+            s = phase.get_location_series(location_columns=[location_column], remove_duplicates=remove_duplicates)
+            series.append(np.array(s))
+        return series
     
     def set_hash(self, hash):
         self.hash = hash
@@ -48,23 +56,24 @@ class PhaseClustering:
             raise ValueError('You must provide metric_fn when you chose custom metric!')
     
         clustering = None
+        series = self.normalized_series if self.normalized else self.series
 
         if metric == 'dtw':
-            distances = dtw_ndim.distance_matrix_fast(self.series)
+            distances = dtw_ndim.distance_matrix_fast(series)
             clustering = AgglomerativeClustering(n_clusters=n_clusters, metric='precomputed', linkage=linkage, compute_full_tree=True)
             clustering.fit_predict(distances)
 
         elif metric == 'euclidean':
-            series = self._to_time_series_dataset(self.series)
+            series = self._to_time_series_dataset(series)
             series = series.reshape(len(series), -1)
             clustering = AgglomerativeClustering(n_clusters=n_clusters, metric=metric, linkage=linkage, compute_full_tree=True)
             clustering.fit_predict(series)
 
         elif metric == 'custom':
-            distances = np.zeros((len(self.series), len(self.series)), dtype=np.float64)
-            for i in range(len(self.series) - 1):
-                for j in range(i + 1, len(self.series)):
-                    dist = metric_fn(self.series[i], self.series[j])
+            distances = np.zeros((len(series), len(series)), dtype=np.float64)
+            for i in range(len(series) - 1):
+                for j in range(i + 1, len(series)):
+                    dist = metric_fn(series[i], series[j])
                     distances[i, j] = dist
                     distances[j, i] = dist
             clustering = AgglomerativeClustering(n_clusters=n_clusters, metric='precomputed', linkage=linkage, compute_full_tree=True)
@@ -74,14 +83,16 @@ class PhaseClustering:
         self.done = True
         return self.labels_
     
-    def kmeans_fit(self, n_clusters, metric, **kwargs):
+    def kmeans_fit(self, n_clusters, metric, monitor_distances=None, **kwargs):
         # Validate the arguments
         self._check_metric(metric)
 
         clustering = KMeans(n_clusters, **kwargs)
-        cls_pred, _ = clustering.fit(self.series, use_c=True)
+        series = self.normalized_series if self.normalized else self.series
+
+        cls_pred, _ = clustering.fit(series, use_c=True, monitor_distances=monitor_distances)
         
-        self.labels_ = [0 for _ in range(len(self.series))]
+        self.labels_ = [0 for _ in range(len(series))]
         for cluster_id in cls_pred:
             for phase_id in cls_pred[cluster_id]:
                 self.labels_[phase_id] = cluster_id
