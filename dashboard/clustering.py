@@ -9,6 +9,7 @@ from ftpr.visualization import PhaseVisualizer
 
 num_cols = 3
 num_rows = 4
+bins = (120 // 4, 80 // 4)
 
 events_config = {
     'Pass': {
@@ -36,18 +37,24 @@ def on_cluster_button_click(index):
     st.session_state['phase_index'] = 0
 
 @st.cache_data(max_entries=12, hash_funcs={PhaseClustering: hash_clustering})
-def plot_cluster(clustering: PhaseClustering, cluster_index: int):
+def plot_cluster(clustering: PhaseClustering, cluster_index: int, visualization: str):
     series_in_cluster = clustering.get_cluster_series(best_cluster_indeces[cluster_index])
-    pitch = Pitch(pitch_type='statsbomb', pitch_color='#22312b', line_color='#c7d5cc')
-    fig, ax = pitch.draw(figsize=(16, 11), constrained_layout=False, tight_layout=True)
-    fig.set_facecolor('#22312b')
+    if visualization == 'Arrows':
+        pitch = Pitch(pitch_type='statsbomb', pitch_color='#22312b', line_color='#c7d5cc')
+        fig, ax = pitch.draw(figsize=(16, 11), constrained_layout=False, tight_layout=True)
+        fig.set_facecolor('#22312b')
 
-    for ser in series_in_cluster:
-        pitch.scatter(ser[0, 0], ser[0, 1], s=200, ax=ax)
-        for i in range(len(ser) - 1):
-            pitch.arrows(ser[i, 0], ser[i, 1], ser[i + 1, 0], ser[i + 1, 1],
-                            color='#777777', ax=ax, width=1)
-    
+        for ser in series_in_cluster:
+            pitch.scatter(ser[0, 0], ser[0, 1], s=200, ax=ax)
+            for i in range(len(ser) - 1):
+                pitch.arrows(ser[i, 0], ser[i, 1], ser[i + 1, 0], ser[i + 1, 1],
+                                color='#777777', ax=ax, width=1)
+    else:
+        pitch = Pitch(pitch_type='statsbomb', line_zorder=2,
+              pitch_color='#22312b', line_color='#efefef', linewidth=1)
+        pv = PhaseVisualizer(figsize=(16, 11))
+        fig, ax = pv.plot_heatmap(pitch, series_in_cluster, bins=bins)
+
     return fig, len(series_in_cluster)
 
 def on_prev_button_clicked():
@@ -137,7 +144,7 @@ if team_name:
         st.sidebar.markdown('## Normalized')
         normalized_list = ['min-max', 'z', 'No']
         normalized = st.sidebar.selectbox('Normalized', normalized_list)
-        # normalized = normalized == 'True'
+
 
         num_batches = int((n_clusters / num_rows / num_cols) - 0.5) + 1
 
@@ -156,6 +163,10 @@ if team_name:
         loading_progress = st.progress(0, text = f'Loading Batch (0 / {num_cols * num_rows})...')
         cols = st.columns([1] +  (num_cols * [10]) + [1])
         
+        st.sidebar.markdown('## Visualization')
+        visualization_list = ['Arrows', 'Heatmap']
+        visualization = st.sidebar.selectbox('Visualization', visualization_list)
+        
         with cols[0]:
             prev_button = st.button('<', use_container_width=True, disabled=False, on_click=on_prev_button_clicked)        
 
@@ -168,7 +179,7 @@ if team_name:
                 with cols[i]:        
                     index = batch * num_rows * num_cols + j * num_cols + (i - 1)
                     if index < n_clusters:
-                        fig, num_phases = plot_cluster(clustering, index)
+                        fig, num_phases = plot_cluster(clustering, index, visualization=visualization)
                         st.button(f'Num Phases: {num_phases}, Num Shots: {cluster_score[best_cluster_indeces[index]]}',
                                 key=f'button_{index}', on_click=on_cluster_button_click, args=(index,))
                         st.pyplot(fig)
