@@ -65,26 +65,13 @@ class Phase:
         new_df.insert(len(self._df.columns), 'keep', True)
         location = None
         # loop over the entire df except the last event
-        for i in range(len(self._df) - 1):
+        for i in range(len(self._df)):
             row = self._df.iloc[i]
-            new_location = self.get_location(i)
-            # if the event is ball receipt
-            if row['type'] == 'Ball Receipt*':
-                # drop if the ending location is as same as the starting location or the location is as same as the next event's location
-                if location == new_location or (i < len(self._df) - 1 and self.get_location(i + 1) == new_location):
-                    new_df.iat[i, len(self._df.columns)] = False
+            location = self.get_location(i)
             # drop if the event is carry and the ending location is as same as the starting location
-            elif row['type'] == 'Carry' and new_location == self.get_location(i, 'Carry'):
+            if row['type'].lower() == 'carry' and location == self.get_location(i, 'carry'):
                 new_df.iat[i, len(self._df.columns)] = False
-        # if the last event is ball receipt and its location is different from the last end location: remove it
-        if len(self._df) == 1:
-            new_df.iat[0, len(self._df.columns)] = True
-        else:
-            last_event = self._df.iloc[-2]['type']
-            if self._df.iloc[-1]['type'] == 'Ball Receipt*' and self.get_location(-2, last_event) != self.get_location(-1):
-                new_df.iat[-1, len(self._df.columns)] = False
-            else:
-                new_df.iat[-1, len(self._df.columns)] = True
+
         return Phase(self._df[new_df['keep']], self.id_column)
 
     def __remove_duplicate_locations(self, arr):
@@ -94,20 +81,23 @@ class Phase:
                 result.append(arr[i].tolist())
         return result
             
-    def get_location_series(self, location_columns, remove_duplicates=False):
-        result = np.zeros((len(self._df), len(location_columns) * 2))
+    def get_location_series(self, remove_duplicates=False):
+        if len(self._df) == 0:
+            return np.array([])
+        result = np.zeros((len(self._df), 2))
         # if the location is splitted convert the columns to numpy array and concatenate them
         if self.is_splited():
-            for i, col in enumerate(location_columns):
-                result[:, i * 2] = np.array(self._df[f'{col}_x'])
-                result[:, i * 2 + 1] = np.array(self._df[f'{col}_y'])
+            result[:, 0] = np.array(self._df[f'location_x'])
+            result[:, 1] = np.array(self._df[f'location_y'])
         else:
             # else if the location is not splitted iterate over the column and create the final array
             for i in range(len(self._df)):
-                for j, col in enumerate(location_columns):
-                    x, y = self._df.iloc[i][col][1:-1].replace(' ', '').split(',')
-                    result[i, j * 2] = x
-                    result[i, j * 2 + 1] = y
+                x, y = self._df.iloc[i]['location'][1:-1].replace(' ', '').split(',')
+                result[i, 0] = x
+                result[i, 1] = y
+        last_event = self._df.iloc[-1]['type'].lower()
+        if last_event in ['pass', 'carry']:
+            result = np.append(result, np.array(self.get_location(-1, last_event))[np.newaxis, ...], axis=0)
         return self.__remove_duplicate_locations(result) if remove_duplicates else result
 
     def get_summary(self):
@@ -131,8 +121,9 @@ class Phase:
         i = i % len(self._df)
         col = f'{event.lower()}_end_location' if event else 'location'
         if self.is_splited():
-            return self._df.iloc[i][f'{col}_x'], self._df.iloc[i][f'{col}_y']
-        return self._df.iloc[i][col][1:-1].replace(' ', '').split(',')
+            return float(self._df.iloc[i][f'{col}_x']), float(self._df.iloc[i][f'{col}_y'])
+        x, y = self._df.iloc[i][col][1:-1].replace(' ', '').split(',')[:2]
+        return float(x), float(y)
     
     def __getitem__(self, key):
         return self._df[key]

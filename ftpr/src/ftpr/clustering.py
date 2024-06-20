@@ -1,5 +1,5 @@
 from .entities import Phase
-from .preprocessing import normalize
+from .preprocessing import normalize, z_normalize
 from typing import List
 import numpy as np
 from dtaidistance import dtw_ndim
@@ -11,19 +11,23 @@ class PhaseClustering:
     SUPPORTED_METRICS = {'dtw', 'softdtw', 'euclidean', 'custom'}
     SUPPORTED_LINKAGES = {'ward', 'complete', 'average', 'single'}
 
-    def __init__(self, phases: List[Phase], location_column='location', remove_duplicates=True, normalize_series=True) -> None:
+    def __init__(self, phases: List[Phase], remove_duplicates=True, normalize_series='min-max') -> None:
         self.phases = phases
-        self.series = self._phase_to_series(phases, location_column, remove_duplicates)
-        if normalize_series:
-            self.normalized_series = normalize(self.series)
+        self.series = self._phase_to_series(phases, remove_duplicates)
         self.normalized = normalize_series
+        if normalize_series == 'min-max':
+            self.normalized_series = normalize(self.series)
+        if normalize_series == 'z':
+            self.normalized_series = z_normalize(self.series)   
+        else:
+            self.normalized = False
         self.done = False
         self.hash = None
     
-    def _phase_to_series(self, phases, location_column, remove_duplicates):
+    def _phase_to_series(self, phases, remove_duplicates):
         series = []
         for phase in phases:
-            s = phase.get_location_series(location_columns=[location_column], remove_duplicates=remove_duplicates)
+            s = phase.get_location_series(remove_duplicates=remove_duplicates)
             series.append(np.array(s))
         return series
     
@@ -58,7 +62,7 @@ class PhaseClustering:
         clustering = None
         series = self.normalized_series if self.normalized else self.series
 
-        if metric == 'dtw':
+        if metric in ['dtw', 'softdtw']:    
             distances = dtw_ndim.distance_matrix_fast(series)
             clustering = AgglomerativeClustering(n_clusters=n_clusters, metric='precomputed', linkage=linkage, compute_full_tree=True)
             self.labels_ = clustering.fit_predict(distances)

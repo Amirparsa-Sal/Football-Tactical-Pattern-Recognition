@@ -40,7 +40,7 @@ def load_phase_worker(df, filter_static_events=True, min_phase_length=2):
             phase = Phase(df[start:current])
             if filter_static_events:
                 phase = phase.filter_static_events()
-            if len(phase) >= min_phase_length:
+            if len(phase.get_location_series(remove_duplicates=True)) >= min_phase_length:
                 phases.append(phase)
             phase_id += 1
             start = current
