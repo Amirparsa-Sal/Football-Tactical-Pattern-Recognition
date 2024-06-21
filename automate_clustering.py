@@ -18,7 +18,7 @@ def monitor_distance(clusters_distances, is_last):
         for i, cluster_id in enumerate(clusters):
             if cluster_id not in cluster_info_dict:
                 cluster_info_dict[cluster_id] = {'sum': 0, 'count': 0}
-            cluster_info_dict[cluster_id]['sum'] += distances[i]
+            cluster_info_dict[cluster_id]['sum'] += distances[i] ** 2
             cluster_info_dict[cluster_id]['count'] += 1
         
         total_avg = 0
@@ -69,6 +69,7 @@ if __name__ == '__main__':
     phase_clusterings = []
     clusterings = []
     cls_preds = []
+    inertias = []
 
     if args.type.lower() == 'kmeans':
         for n_clusters in range(args.start, args.end + 1, args.step):
@@ -90,8 +91,11 @@ if __name__ == '__main__':
         'n_clusters': list(range(args.start, args.end + 1, args.step)),
         'clusterings': clusterings,
         'phase_clusterings': phase_clusterings,
-        'cls_preds': cls_preds
+        'cls_preds': cls_preds,
     }
+
+    if args.type.lower() == 'kmeans':
+        result_dict['inertias'] = inertias
 
     with open(args.output, 'wb') as f:
         pickle.dump(result_dict, f)
