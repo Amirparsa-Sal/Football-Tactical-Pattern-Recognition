@@ -37,7 +37,7 @@ def on_cluster_button_click(index):
     st.session_state['phase_index'] = 0
 
 @st.cache_data(max_entries=12, hash_funcs={PhaseClustering: hash_clustering})
-def plot_cluster(clustering: PhaseClustering, cluster_index: int, visualization: str):
+def plot_cluster(clustering: PhaseClustering, cluster_index: int, visualization: str, ranking_metric: str):
     series_in_cluster = clustering.get_cluster_series(best_cluster_indeces[cluster_index])
     if visualization == 'Arrows':
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#22312b', line_color='#c7d5cc')
@@ -96,18 +96,14 @@ def perform_clustering(type, team_name, n_clusters, min_phase_length, metric, no
     else:
         cls_pred = clustering.kmeans_fit(n_clusters, metric, show_progress=False)
 
-    cluster_score = [0 for _ in range(n_clusters)]
-    cluster_dist = []
-    for cluster_id in range(n_clusters):
-        phases_in_cluster = clustering.get_cluster_phases(cluster_id)
-        cluster_dist.append(len(phases_in_cluster))
-        for phase in phases_in_cluster:
-            cluster_score[cluster_id] += Counter(phase['type']).get('Shot', 0)
-    cluster_score = np.array(cluster_score)
+    return clustering, cls_pred
 
+@st.cache_data(max_entries=1, hash_funcs={PhaseClustering: hash_clustering})
+def rank_clusters(clustering: PhaseClustering, metric):
+    # avg = metric == 'xg'
+    cluster_score = clustering.get_cluster_scores(metric=metric)
     best_cluster_indeces = np.argsort(cluster_score)[::-1]
-
-    return clustering, cls_pred, cluster_score, best_cluster_indeces
+    return cluster_score, best_cluster_indeces
 
 matches_df_dir = '../data/matches.csv'
 
@@ -118,8 +114,8 @@ all_teams = list(matches_df['home_team'].unique())
 all_teams.sort()
 
 # Variables
-st.sidebar.markdown('## Select a team')
-team_name = st.sidebar.selectbox('Choose', [''] + all_teams)
+st.sidebar.markdown('## Settings')
+team_name = st.sidebar.selectbox('Team', [''] + all_teams)
 
 if 'inspect_mode' not in st.session_state:
     st.session_state['inspect_mode'] = False
@@ -128,22 +124,20 @@ if team_name:
 
     if not st.session_state['inspect_mode']:
         types = ['Agglomerative', 'K-means']
-        st.sidebar.markdown('## Clustering Type')
         type = st.sidebar.selectbox('Clustering Type', types)
 
-        st.sidebar.markdown('## Num Clusters')
         n_clusters = st.sidebar.slider('Num Clusters', 2, 500, value=100)
 
-        st.sidebar.markdown('## Min Length')
         min_phase_length = st.sidebar.slider('Min Length', 1, 10, value=3)
 
-        st.sidebar.markdown('## Metric')
         metrics = ['dtw', 'softdtw', 'euclidean']
         metric = st.sidebar.selectbox('Metric', metrics)
 
-        st.sidebar.markdown('## Normalized')
         normalized_list = ['min-max', 'z', 'No']
-        normalized = st.sidebar.selectbox('Normalized', normalized_list)
+        normalized = st.sidebar.selectbox('Normalization', normalized_list)
+
+        ranking_metrics = ['Shot', 'xG', 'Goal']
+        ranking_metric = st.sidebar.selectbox('Ranking Metric', ranking_metrics)
 
 
         num_batches = int((n_clusters / num_rows / num_cols) - 0.5) + 1
@@ -156,7 +150,9 @@ if team_name:
 
         # Clustering
 
-        clustering, cls_pred, cluster_score, best_cluster_indeces = perform_clustering(type, team_name, n_clusters, min_phase_length, metric, normalized)
+        clustering, cls_pred = perform_clustering(type, team_name, n_clusters, min_phase_length, metric, normalized)
+        cluster_score, best_cluster_indeces = rank_clusters(clustering, ranking_metric.lower())
+
         st.session_state['best_cluster_indeces'] = best_cluster_indeces
 
         batch_progress = st.progress((batch + 1) / num_batches, text = f'Cluster {batch + 1} / {num_batches}')
@@ -179,7 +175,7 @@ if team_name:
                 with cols[i]:        
                     index = batch * num_rows * num_cols + j * num_cols + (i - 1)
                     if index < n_clusters:
-                        fig, num_phases = plot_cluster(clustering, index, visualization=visualization)
+                        fig, num_phases = plot_cluster(clustering, index, visualization=visualization, ranking_metric=ranking_metric)
                         st.button(f'Num Phases: {num_phases}, Num Shots: {cluster_score[best_cluster_indeces[index]]}',
                                 key=f'button_{index}', on_click=on_cluster_button_click, args=(index,))
                         st.pyplot(fig)
