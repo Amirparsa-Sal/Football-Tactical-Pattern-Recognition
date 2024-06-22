@@ -5,6 +5,7 @@ import numpy as np
 from dtaidistance import dtw_ndim
 from dtaidistance.clustering.kmeans import KMeans
 from sklearn.cluster import AgglomerativeClustering
+from collections import Counter
 
 class PhaseClustering:
 
@@ -103,6 +104,32 @@ class PhaseClustering:
         self.done = True
         return self.labels_, clustering
 
+    def get_cluster_scores(self, metric='shot', avg=False):
+        self._check_done()
+        if metric not in ['shot', 'xg', 'goal']:
+            raise ValueError("Metric value must be in ['shot', 'xg', 'goal'].")
+        n_clusters = len(self.labels_)
+        cluster_scores = [0 for _ in range(n_clusters)]
+        cluster_counts = [0 for _ in range(n_clusters)]
+        for i, phase in enumerate(self.phases):
+            cluster_id = self.labels_[i]
+            cluster_counts[cluster_id] += 1
+            shot_df = phase[phase['type'] == 'Shot']
+            if metric == 'shot':
+                cluster_scores[cluster_id] += len(shot_df)
+            elif metric == 'xg':
+                cluster_scores[cluster_id] += shot_df['shot_statsbomb_xg'].sum()
+            elif metric == 'goal':
+                cluster_scores[cluster_id] += len(shot_df[shot_df['shot_outcome'] == 'Goal'])
+        if avg:
+            result = [0 for _ in range(n_clusters)]
+            for i, count in enumerate(cluster_counts):
+                if count != 0:
+                    result[i] = cluster_scores[i] / count
+            return np.array(result)
+        return np.array(cluster_scores)
+
+
     def get_cluster_phases(self, cluster_id):
         self._check_done()
         return [phase for i, phase in enumerate(self.phases) if self.labels_[i] == cluster_id]
@@ -127,6 +154,5 @@ class PhaseClustering:
         for i, series in enumerate(dataset):
             npad[0] = (0, max_length - len(series))
             padded_series = np.pad(series, pad_width=npad, mode='edge')
-            result[i] = padded_series
-        
+            result[i] = padded_series      
         return result
