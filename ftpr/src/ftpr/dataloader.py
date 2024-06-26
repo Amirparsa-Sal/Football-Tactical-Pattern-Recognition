@@ -1,7 +1,8 @@
 from .entities import Phase
 import multiprocessing
+from typing import List, Iterable
 
-def phase_generator(df, filter_static_events=True, min_phase_length=2, phase_id_col='phase_id'):
+def phase_generator(df, filter_static_events=True, min_phase_length=2, phase_id_col='phase_id') -> Iterable[Phase]:
     if phase_id_col not in df:
         raise ValueError(f'The dataframe does not have a column named {phase_id_col}')
     
@@ -28,7 +29,7 @@ def phase_generator(df, filter_static_events=True, min_phase_length=2, phase_id_
             yield Phase(df[start: current])
 
 def load_phase_worker(df, filter_static_events=True, min_phase_length=2):
-    phase_id = 0
+    phase_id = df.iloc[0, -1]
     start = 0
     current = 0
     phases = []
@@ -40,7 +41,7 @@ def load_phase_worker(df, filter_static_events=True, min_phase_length=2):
             phase = Phase(df[start:current])
             if filter_static_events:
                 phase = phase.filter_static_events()
-            if len(phase.get_location_series(remove_duplicates=True)) >= min_phase_length:
+            if len(phase) >= min_phase_length:
                 phases.append(phase)
             phase_id += 1
             start = current
@@ -53,7 +54,7 @@ def load_phase_worker(df, filter_static_events=True, min_phase_length=2):
             phases.append(phase)
     return phases
 
-def load_phases(df, filter_static_events=True, min_phase_length=2, n_jobs=1, phase_id_col='phase_id'):
+def load_phases(df, filter_static_events=True, min_phase_length=2, n_jobs=1, phase_id_col='phase_id') -> List[Phase]:
     if phase_id_col not in df:
         raise ValueError(f'The dataframe does not have a column named {phase_id_col}')
     
@@ -85,7 +86,7 @@ def load_phases(df, filter_static_events=True, min_phase_length=2, n_jobs=1, pha
         results.extend(r)
     return results
 
-def load_phase(df, id, phase_id_col='phase_id'):
+def load_phase(df, id, phase_id_col='phase_id') -> Phase:
     if phase_id_col not in df.columns:
         raise ValueError(f'The dataframe does not have a column named {phase_id_col}')
     if id not in df[phase_id_col]:
