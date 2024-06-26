@@ -8,10 +8,26 @@ class Descretizer(ABC):
         pass
     
     @abstractmethod
-    def apply(self, phase: Phase, index: int):
+    def apply(self, phase: Phase, index: int) -> Tuple:
         pass    
 
-class PhaseDescretizer:
+    def gen_sequences(self, phases: List[Phase]) -> Iterator[Tuple]:
+        for phase in phases:
+            sequence = []
+            for i in range(len(phase)):
+                sequence.append(self.apply(phase, i))
+            yield sequence
+
+class Writer(ABC):
+
+    def __init__(self) -> None:
+        pass
+    
+    @abstractmethod
+    def write(self, descretizer: Descretizer, phases: List[Phase], filepath: str):
+        pass
+        
+class MultiDescretizer(Descretizer):
 
     def __init__(self, descretizers: List[Descretizer]):
         if not isinstance(descretizers, list):
@@ -20,16 +36,11 @@ class PhaseDescretizer:
             raise ValueError('Descretizers list must not be empty!')
         self.descretizers = descretizers
 
-    def descretize(self, phases: List[Phase]) -> Iterator[Tuple]:
-        for phase in phases:
-            sequence = []
-            for i in range(len(phase)):
-                itemset = self.descretizers[0].apply(phase, i)
-                for j in range(1, len(self.descretizers)):
-                    itemset = itemset + self.descretizers[j].apply(phase, i)
-                sequence.append(itemset)
-            yield sequence
-
+    def apply(self, phase: Phase, index: int) -> Tuple:
+        itemset = self.descretizers[0].apply(phase, index)
+        for j in range(1, len(self.descretizers)):
+            itemset = itemset + self.descretizers[j].apply(phase, index)
+        return itemset
 
 class EventDescretizer(Descretizer):
 
@@ -53,7 +64,7 @@ class EventDescretizer(Descretizer):
 
 class LocationDescretizer(Descretizer):
 
-    index_to_zone = {
+    zone_to_index = {
         "Left Flank": 1,
         "Right Flank": 2,
         "Own box": 3,
@@ -72,11 +83,11 @@ class LocationDescretizer(Descretizer):
         self.dynamic_events = dynamic_events
 
     def get_zone_index(self, x, y):
-        if y < self.flank1: return 1
-        if y > self.flank2: return 2
-        if x < self.arc1: return 3
-        if x > self.arc2: return 4
-        return 5
+        if y < self.flank1: return self.zone_to_index['Left Flank']
+        if y > self.flank2: return self.zone_to_index['Right Flank']
+        if x < self.arc1: return self.zone_to_index['Own box']
+        if x > self.arc2: return self.zone_to_index['Opposition box']
+        return self.zone_to_index['Midfield']
     
     def apply(self, phase: Phase, index: int):
         event = phase.iloc[index][self.event_column]
@@ -89,3 +100,22 @@ class LocationDescretizer(Descretizer):
         else:
             itemset = itemset + (0, )
         return itemset
+
+class CMSPADEWriter(Writer):
+
+    def __init__(self) -> None:
+        super().__init__()
+    
+    def write(self, descretizer: Descretizer, phases: List[Phase], filepath: str):
+        if not descretizer:
+            raise ValueError('Descretizer argument can not be none!')
+        with open(filepath, 'w') as f: 
+            for sequence in descretizer.gen_sequences(phases):
+                line = ""
+                for itemset in sequence:
+                    for item in itemset:
+                        line += str(item)
+                        line += " "
+                    line += "-1 "
+                line += "-2\n"
+                f.write(line)
