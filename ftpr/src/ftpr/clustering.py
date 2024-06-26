@@ -16,6 +16,7 @@ class PhaseClustering:
         self.phases = phases
         self.series = self._phase_to_series(phases, remove_duplicates)
         self.normalized = normalize_series
+        self.n_clusters = 0
         if normalize_series == 'min-max':
             self.normalized_series = normalize(self.series)
         if normalize_series == 'z':
@@ -51,6 +52,10 @@ class PhaseClustering:
     def _check_done(self):
         if not self.done:
             raise RuntimeError('You must perform clustering at least once to use this method!')
+    
+    def _check_cluster_id(self, cluster_id):
+        if cluster_id >= self.n_clusters:
+            raise ValueError(f'The chosen cluster does not exist!')
         
     def agglomerative_fit(self, n_clusters, metric, linkage='complete', metric_fn=None):
         # Validate the arguments
@@ -85,6 +90,7 @@ class PhaseClustering:
             self.labels_ = clustering.fit_predict(distances)
         
         self.done = True
+        self.n_clusters = n_clusters
         return self.labels_, clustering
     
     def kmeans_fit(self, n_clusters, metric, monitor_distances=None, **kwargs):
@@ -102,6 +108,7 @@ class PhaseClustering:
                 self.labels_[phase_id] = cluster_id
 
         self.done = True
+        self.n_clusters = n_clusters
         return self.labels_, clustering
 
     def get_cluster_scores(self, metric='shot', avg=False):
@@ -109,8 +116,8 @@ class PhaseClustering:
         if metric not in ['shot', 'xg', 'goal']:
             raise ValueError("Metric value must be in ['shot', 'xg', 'goal'].")
         n_clusters = len(self.labels_)
-        cluster_scores = [0 for _ in range(n_clusters)]
-        cluster_counts = [0 for _ in range(n_clusters)]
+        cluster_scores = [0 for _ in range(self.n_clusters)]
+        cluster_counts = [0 for _ in range(self.n_clusters)]
         for i, phase in enumerate(self.phases):
             cluster_id = self.labels_[i]
             cluster_counts[cluster_id] += 1
@@ -132,10 +139,12 @@ class PhaseClustering:
 
     def get_cluster_phases(self, cluster_id):
         self._check_done()
+        self._check_cluster_id(cluster_id)
         return [phase for i, phase in enumerate(self.phases) if self.labels_[i] == cluster_id]
 
     def get_cluster_series(self, cluster_id):
         self._check_done()
+        self._check_cluster_id(cluster_id)
         return [serie for i, serie in enumerate(self.series) if self.labels_[i] == cluster_id]
 
 

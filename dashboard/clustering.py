@@ -37,8 +37,8 @@ def on_cluster_button_click(index):
     st.session_state['phase_index'] = 0
 
 @st.cache_data(max_entries=12, hash_funcs={PhaseClustering: hash_clustering})
-def plot_cluster(clustering: PhaseClustering, cluster_index: int, visualization: str, ranking_metric: str):
-    series_in_cluster = clustering.get_cluster_series(best_cluster_indeces[cluster_index])
+def plot_cluster(clustering: PhaseClustering, cluster_index: int, _best_cluster_indeces, visualization: str, ranking_metric: str):
+    series_in_cluster = clustering.get_cluster_series(_best_cluster_indeces[cluster_index])
     if visualization == 'Arrows':
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#22312b', line_color='#c7d5cc')
         fig, ax = pitch.draw(figsize=(16, 11), constrained_layout=False, tight_layout=True)
@@ -149,12 +149,8 @@ if team_name:
             st.session_state['batch'] = 0   
 
         # Clustering
-
         clustering, cls_pred = perform_clustering(type, team_name, n_clusters, min_phase_length, metric, normalized)
         cluster_score, best_cluster_indeces = rank_clusters(clustering, ranking_metric.lower())
-
-        st.session_state['best_cluster_indeces'] = best_cluster_indeces
-
         batch_progress = st.progress((batch + 1) / num_batches, text = f'Cluster {batch + 1} / {num_batches}')
         loading_progress = st.progress(0, text = f'Loading Batch (0 / {num_cols * num_rows})...')
         cols = st.columns([1] +  (num_cols * [10]) + [1])
@@ -172,11 +168,11 @@ if team_name:
         figs = dict()
         for j in range(num_rows):
             for i in range(1, 1 + num_cols):
-                with cols[i]:        
+                with cols[i]:                            
                     index = batch * num_rows * num_cols + j * num_cols + (i - 1)
                     if index < n_clusters:
-                        fig, num_phases = plot_cluster(clustering, index, visualization=visualization, ranking_metric=ranking_metric)
-                        st.button(f'Num Phases: {num_phases}, Num Shots: {cluster_score[best_cluster_indeces[index]]}',
+                        fig, num_phases = plot_cluster(clustering, index, best_cluster_indeces, visualization=visualization, ranking_metric=ranking_metric)
+                        st.button(f'{best_cluster_indeces[index]})- Num Phases: {num_phases}, {ranking_metric}: {cluster_score[best_cluster_indeces[index]]}',
                                 key=f'button_{index}', on_click=on_cluster_button_click, args=(index,))
                         st.pyplot(fig)
                     loading_progress.progress((j * num_cols + i) / (num_rows * num_cols))
