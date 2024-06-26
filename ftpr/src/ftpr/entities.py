@@ -96,7 +96,7 @@ class Phase:
                 result[i, 0] = x
                 result[i, 1] = y
         last_event = self._df.iloc[-1]['type'].lower()
-        if last_event in ['pass', 'carry']:
+        if last_event in ['pass', 'shot', 'carry']:
             result = np.append(result, np.array(self.get_location(-1, last_event))[np.newaxis, ...], axis=0)
         return self.__remove_duplicate_locations(result) if remove_duplicates else result
 
@@ -129,4 +129,5 @@ class Phase:
         return self._df[key]
     
     def __len__(self):
-        return len(self._df)
+        l = len(self.get_location_series(remove_duplicates=True))
+        return 1 if l < 3 else l - 1
