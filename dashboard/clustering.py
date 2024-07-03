@@ -3,7 +3,6 @@ from mplsoccer import Pitch
 import numpy as np
 from ftpr.clustering import PhaseClustering
 from ftpr.dataloader import load_phases
-from collections import Counter
 import streamlit as st
 from ftpr.visualization import PhaseVisualizer
 
@@ -28,6 +27,21 @@ location_columns = ['location', 'pass_end_location', 'carry_end_location', 'shot
 
 st.set_page_config(layout="wide") 
 
+
+def create_select_box(name, options, default_value=None, session_key=None):
+    if session_key in st.session_state:
+        index = options.index(st.session_state[session_key])
+    else:
+        index = options.index(default_value) if default_value else 0
+    return st.sidebar.selectbox(name, options, index=index, key=session_key)
+
+def create_slider(name, min_range, max_range, default_value, session_key=None, sidebar=True):
+    if session_key in st.session_state:
+        value = st.session_state[session_key]
+    else:
+        value = default_value
+    return st.sidebar.slider(name, min_range, max_range, value=value, key=session_key)
+
 def hash_clustering(obj: PhaseClustering):
     return hash(obj)
 
@@ -35,6 +49,16 @@ def on_cluster_button_click(index):
     st.session_state['inspect_mode'] = True
     st.session_state['cluster_index'] = index
     st.session_state['phase_index'] = 0
+    st.session_state['best_cluster_indeces'] = best_cluster_indeces
+    # Saving the config
+    st.session_state['n_clusters'] = n_clusters
+    st.session_state['min_phase_length'] = min_phase_length
+    st.session_state['normalized'] = normalized
+    st.session_state['type'] = type
+    st.session_state['metric'] = metric
+    st.session_state['ranking_metric'] = ranking_metric
+    st.session_state['team_name'] = team_name
+    st.session_state['visualization'] = visualization
 
 @st.cache_data(max_entries=12, hash_funcs={PhaseClustering: hash_clustering})
 def plot_cluster(clustering: PhaseClustering, cluster_index: int, _best_cluster_indeces, visualization: str, ranking_metric: str):
@@ -89,7 +113,8 @@ def perform_clustering(type, team_name, n_clusters, min_phase_length, metric, no
     clustering = PhaseClustering(phases, normalize_series=normalized)
     st.session_state['clustering'] = clustering
     clustering.set_hash(f'{team_name}-{type}-{n_clusters}-{min_phase_length}-{metric}-{normalized}')
-
+    st.session_state['clustering'] = clustering
+    
     cls_pred = None
     if type == 'Agglomerative':
         cls_pred = clustering.agglomerative_fit(n_clusters, metric, linkage='complete')
@@ -113,9 +138,11 @@ matches_df = matches_df.sort_values('match_date')
 all_teams = list(matches_df['home_team'].unique())
 all_teams.sort()
 
+
 # Variables
 st.sidebar.markdown('## Settings')
-team_name = st.sidebar.selectbox('Team', [''] + all_teams)
+teams = [''] + all_teams
+team_name = create_select_box('Team Name', options=teams, default_value='', session_key='team_name')
 
 if 'inspect_mode' not in st.session_state:
     st.session_state['inspect_mode'] = False
@@ -124,21 +151,20 @@ if team_name:
 
     if not st.session_state['inspect_mode']:
         types = ['Agglomerative', 'K-means']
-        type = st.sidebar.selectbox('Clustering Type', types)
-
-        n_clusters = st.sidebar.slider('Num Clusters', 2, 500, value=100)
-
-        min_phase_length = st.sidebar.slider('Min Length', 1, 10, value=3)
+        type = create_select_box('Clustering Type', options=types, session_key='clustering_type')
+        
+        n_clusters = create_slider('Num Clusters', min_range=2, max_range=500, default_value=100, session_key='n_clusters')
+        
+        min_phase_length = create_slider('Min Length', min_range=1, max_range=10, default_value=3, session_key='min_phase_length')
 
         metrics = ['dtw', 'softdtw', 'euclidean']
-        metric = st.sidebar.selectbox('Metric', metrics)
+        metric = create_select_box('Metric', options=metrics, session_key='metric')
 
         normalized_list = ['min-max', 'z', 'No']
-        normalized = st.sidebar.selectbox('Normalization', normalized_list)
+        normalized = create_select_box('Normalization', options=normalized_list, session_key='normalized')
 
         ranking_metrics = ['Shot', 'xG', 'Goal']
-        ranking_metric = st.sidebar.selectbox('Ranking Metric', ranking_metrics)
-
+        ranking_metric = create_select_box('Ranking Metric', options=ranking_metrics, session_key='ranking_metric')
 
         num_batches = int((n_clusters / num_rows / num_cols) - 0.5) + 1
 
@@ -151,13 +177,16 @@ if team_name:
         # Clustering
         clustering, cls_pred = perform_clustering(type, team_name, n_clusters, min_phase_length, metric, normalized)
         cluster_score, best_cluster_indeces = rank_clusters(clustering, ranking_metric.lower())
+        st.session_state['best_cluster_indeces'] = best_cluster_indeces
         batch_progress = st.progress((batch + 1) / num_batches, text = f'Cluster {batch + 1} / {num_batches}')
         loading_progress = st.progress(0, text = f'Loading Batch (0 / {num_cols * num_rows})...')
         cols = st.columns([1] +  (num_cols * [10]) + [1])
         
         st.sidebar.markdown('## Visualization')
-        visualization_list = ['Arrows', 'Heatmap']
-        visualization = st.sidebar.selectbox('Visualization', visualization_list)
+        visualization = 1
+        
+        visualization_list = ['Heatmap', 'Arrows']
+        visualization = create_select_box('Visualization', options=visualization_list, session_key='visualization')
         
         with cols[0]:
             prev_button = st.button('<', use_container_width=True, disabled=False, on_click=on_prev_button_clicked)        
@@ -172,7 +201,7 @@ if team_name:
                     index = batch * num_rows * num_cols + j * num_cols + (i - 1)
                     if index < n_clusters:
                         fig, num_phases = plot_cluster(clustering, index, best_cluster_indeces, visualization=visualization, ranking_metric=ranking_metric)
-                        st.button(f'{best_cluster_indeces[index]})- Num Phases: {num_phases}, {ranking_metric}: {cluster_score[best_cluster_indeces[index]]}',
+                        st.button(f'Num Phases: {num_phases}\n{ranking_metric}: {cluster_score[best_cluster_indeces[index]]}',
                                 key=f'button_{index}', on_click=on_cluster_button_click, args=(index,))
                         st.pyplot(fig)
                     loading_progress.progress((j * num_cols + i) / (num_rows * num_cols))
@@ -188,7 +217,7 @@ if team_name:
         phase_index = st.session_state['phase_index'] % len(phases_in_cluster)
         phase = phases_in_cluster[phase_index]
         phase = phase.split_locations(location_columns)
-
+        
         st.button('Back to Main Page', on_click=on_back_to_menu_button_clicked)
         first_row = phase.iloc[0]
         st.markdown(f'Phase ID: {first_row["phase_id"]}')
