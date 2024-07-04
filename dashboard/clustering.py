@@ -5,10 +5,20 @@ from ftpr.clustering import PhaseClustering
 from ftpr.dataloader import load_phases
 import streamlit as st
 from ftpr.visualization import PhaseVisualizer
+from ftpr.preprocessing import PhaseExtractor
+from ftpr.representation import EventDescretizer, LocationDescretizer, MultiSequentialDescritizer, MultiParallelDescritizer, CMSPADEWriter
+from ftpr.miner import find_patterns, rank_patterns, run_miner
 
 num_cols = 3
 num_rows = 4
 bins = (120 // 4, 80 // 4)
+
+event_types = {
+	'pass': ['corner', 'free kick', 'goal kick', 'interception', 'kick off', 'recovery', 'throw-in']
+}
+
+event_desc = EventDescretizer('event', events=PhaseExtractor.HAVING_BALL_EVENTS, event_types=event_types)
+location_desc = LocationDescretizer('loc')
 
 events_config = {
     'Pass': {
@@ -28,29 +38,24 @@ location_columns = ['location', 'pass_end_location', 'carry_end_location', 'shot
 st.set_page_config(layout="wide") 
 
 
-def create_select_box(name, options, default_value=None, session_key=None):
+def create_select_box(name, options, default_value=None, session_key=None, container=st.sidebar):
     if session_key in st.session_state:
         index = options.index(st.session_state[session_key])
     else:
         index = options.index(default_value) if default_value else 0
-    return st.sidebar.selectbox(name, options, index=index, key=session_key)
+    return container.selectbox(name, options, index=index, key=session_key)
 
-def create_slider(name, min_range, max_range, default_value, session_key=None, sidebar=True):
+def create_slider(name, min_range, max_range, default_value, session_key=None, container=st.sidebar):
     if session_key in st.session_state:
         value = st.session_state[session_key]
     else:
         value = default_value
-    return st.sidebar.slider(name, min_range, max_range, value=value, key=session_key)
+    return container.slider(name, min_range, max_range, value=value, key=session_key)
 
 def hash_clustering(obj: PhaseClustering):
     return hash(obj)
 
-def on_cluster_button_click(index):
-    st.session_state['inspect_mode'] = True
-    st.session_state['cluster_index'] = index
-    st.session_state['phase_index'] = 0
-    st.session_state['best_cluster_indeces'] = best_cluster_indeces
-    # Saving the config
+def save_config():
     st.session_state['n_clusters'] = n_clusters
     st.session_state['min_phase_length'] = min_phase_length
     st.session_state['normalized'] = normalized
@@ -59,7 +64,20 @@ def on_cluster_button_click(index):
     st.session_state['ranking_metric'] = ranking_metric
     st.session_state['team_name'] = team_name
     st.session_state['visualization'] = visualization
-
+    
+def on_cluster_button_click(index):
+    st.session_state['mode'] = 'inspect'
+    st.session_state['cluster_index'] = index
+    st.session_state['phase_index'] = 0
+    st.session_state['best_cluster_indeces'] = best_cluster_indeces
+    save_config()
+    
+def on_patterns_button_click(index):
+    st.session_state['mode'] = 'patterns'
+    st.session_state['cluster_index'] = index
+    st.session_state['best_cluster_indeces'] = best_cluster_indeces
+    save_config()
+    
 @st.cache_data(max_entries=12, hash_funcs={PhaseClustering: hash_clustering})
 def plot_cluster(clustering: PhaseClustering, cluster_index: int, _best_cluster_indeces, visualization: str, ranking_metric: str):
     series_in_cluster = clustering.get_cluster_series(_best_cluster_indeces[cluster_index])
@@ -82,19 +100,19 @@ def plot_cluster(clustering: PhaseClustering, cluster_index: int, _best_cluster_
     return fig, len(series_in_cluster)
 
 def on_prev_button_clicked():
-    if st.session_state['inspect_mode']:
+    if st.session_state['mode'] == 'inspect':
         st.session_state['phase_index'] = st.session_state['phase_index'] - 1
-    else:
+    elif st.session_state['mode'] == 'main':
         st.session_state['batch'] = st.session_state['batch'] - 1
 
 def on_next_button_clicked():
-    if st.session_state['inspect_mode']:
+    if st.session_state['mode'] == 'inspect':
         st.session_state['phase_index'] = st.session_state['phase_index'] + 1
-    else:
+    elif st.session_state['mode'] == 'main':
         st.session_state['batch'] = st.session_state['batch'] + 1
 
 def on_back_to_menu_button_clicked():
-    st.session_state['inspect_mode'] = False
+    st.session_state['mode'] = 'main'
 
 @st.cache_data(max_entries=1)
 def load_csv(dir):
@@ -144,12 +162,12 @@ st.sidebar.markdown('## Settings')
 teams = [''] + all_teams
 team_name = create_select_box('Team Name', options=teams, default_value='', session_key='team_name')
 
-if 'inspect_mode' not in st.session_state:
-    st.session_state['inspect_mode'] = False
+if 'mode' not in st.session_state:
+    st.session_state['mode'] = 'main'
 
 if team_name:
 
-    if not st.session_state['inspect_mode']:
+    if st.session_state['mode'] == 'main':
         types = ['Agglomerative', 'K-means']
         type = create_select_box('Clustering Type', options=types, session_key='clustering_type')
         
@@ -179,8 +197,8 @@ if team_name:
         cluster_score, best_cluster_indeces = rank_clusters(clustering, ranking_metric.lower())
         st.session_state['best_cluster_indeces'] = best_cluster_indeces
         batch_progress = st.progress((batch + 1) / num_batches, text = f'Cluster {batch + 1} / {num_batches}')
-        loading_progress = st.progress(0, text = f'Loading Batch (0 / {num_cols * num_rows})...')
-        cols = st.columns([1] +  (num_cols * [10]) + [1])
+        
+        cols = st.columns([1, 3 * num_cols - 2, 1])
         
         st.sidebar.markdown('## Visualization')
         visualization = 1
@@ -189,25 +207,33 @@ if team_name:
         visualization = create_select_box('Visualization', options=visualization_list, session_key='visualization')
         
         with cols[0]:
-            prev_button = st.button('<', use_container_width=True, disabled=False, on_click=on_prev_button_clicked)        
+            prev_button = st.button('Prev', use_container_width=True, disabled=False, on_click=on_prev_button_clicked)        
 
-        with cols[-1]:
-            next_button = st.button('>', use_container_width=True, disabled=False, on_click=on_next_button_clicked)
+        with cols[1]:
+            loading_progress = st.progress(0, text = f'Loading Batch (0 / {num_cols * num_rows})...')
+            
+        with cols[2]:
+            next_button = st.button('Next', use_container_width=True, disabled=False, on_click=on_next_button_clicked)
 
         figs = dict()
         for j in range(num_rows):
+            row_cols = st.columns([3 for _ in range(num_cols)])
             for i in range(1, 1 + num_cols):
-                with cols[i]:                            
+                with row_cols[i - 1]:               
+                    col1, col2 = st.columns([2, 1])             
                     index = batch * num_rows * num_cols + j * num_cols + (i - 1)
                     if index < n_clusters:
                         fig, num_phases = plot_cluster(clustering, index, best_cluster_indeces, visualization=visualization, ranking_metric=ranking_metric)
-                        st.button(f'Num Phases: {num_phases}\n{ranking_metric}: {cluster_score[best_cluster_indeces[index]]}',
-                                key=f'button_{index}', on_click=on_cluster_button_click, args=(index,))
+                        with col1:
+                            st.button(f'Num Phases: {num_phases}\n{ranking_metric}: {cluster_score[best_cluster_indeces[index]]}',
+                                key=f'button_{index}', on_click=on_cluster_button_click, args=(index,), use_container_width=True)
+                        with col2:
+                            st.button('Patterns', key=f'temp_{index}', use_container_width=True, on_click=on_patterns_button_click, args=(index,))
                         st.pyplot(fig)
                     loading_progress.progress((j * num_cols + i) / (num_rows * num_cols))
         loading_progress.empty()
 
-    else:
+    elif st.session_state['mode'] == 'inspect':
         st.sidebar.empty()
         cluster_index = st.session_state['cluster_index']
         best_cluster_indeces = st.session_state['best_cluster_indeces']
@@ -240,3 +266,64 @@ if team_name:
             st.pyplot(fig)
             st.dataframe(phase.get_summary())
             st.write(series_in_cluster[phase_index])
+            
+    elif st.session_state['mode'] == 'patterns':
+        st.sidebar.empty()
+        
+        algorithm = st.sidebar.selectbox('Algorithm', ['VMSP', 'CM-SPADE'])
+        include_events = st.sidebar.checkbox('Include Events', value=True)
+        include_locations = st.sidebar.checkbox('Include Locations', value=True)
+        strategy = st.sidebar.selectbox('Representation Strategy', ['Sequential', 'Parallel'])
+        support = st.sidebar.slider('Min Support(%)', 0, 100, 10)
+        max_gap = st.sidebar.slider('Max Gap', 1, 50, 1, disabled=algorithm=='CM-SPADE')
+        
+        print(support)
+        print(max_gap)
+        
+        st.sidebar.button('Back to Main Page', on_click=on_back_to_menu_button_clicked)
+        
+        all_descs = []
+        if include_events:
+            all_descs.append(event_desc)
+        if include_locations:
+            all_descs.append(location_desc)
+        
+        multi_desc = MultiParallelDescritizer('multi', all_descs) if strategy == 'Parallel' else MultiSequentialDescritizer('multi', all_descs)
+        mapping = multi_desc.get_decode_mapping()
+        scores = {key:0.5 for key in mapping}
+        start_index = 0
+        
+        container = st.container(border=True)
+        for desc in all_descs:
+            states_num = desc.get_states_num()
+            expander = container.expander(desc.name.capitalize())
+            cols = expander.columns(4)
+            for i in range(0, states_num, len(cols)):
+                for j in range(len(cols)):
+                    if i + j < states_num:
+                        with cols[j]:
+                            scores[start_index + i + j] = create_slider(mapping[start_index + i + j], 0.0, 1.0,
+                                                                scores[start_index + i + j], session_key=mapping[start_index + i + j], container=st)
+            start_index += states_num
+
+        cluster_index = st.session_state['cluster_index']
+        best_cluster_indeces = st.session_state['best_cluster_indeces']
+        clustering: PhaseClustering = st.session_state['clustering']
+        phases_in_cluster = clustering.get_cluster_phases(best_cluster_indeces[cluster_index])
+        
+        writer = CMSPADEWriter()
+        writer.write(multi_desc.apply(phases_in_cluster, mode=strategy.casefold()), 'output.tmp')
+        
+        df = None
+        if algorithm == 'VMSP':
+            df = run_miner(algorithm="VMSP", input_filename="output.tmp", output_filename="output.txt", arguments=[f"{support}%", "100", f"{max_gap}"])
+        else:
+            df = run_miner(algorithm="CM-SPADE", input_filename="output.tmp", output_filename="output.txt", arguments=[f"{support}%"])
+        
+        print('Done')
+        
+        df['sup'] = df['sup'] / len(phases_in_cluster)
+    
+        df = rank_patterns(df, scores, mapping)
+        
+        st.write(df)
