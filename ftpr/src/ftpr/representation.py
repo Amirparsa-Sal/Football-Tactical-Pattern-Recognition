@@ -5,8 +5,10 @@ import pandas as pd
 
 class Descretizer(ABC):
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, name) -> None:
+        if not name:
+            raise ValueError('Name parameter must not be None!')
+        self.name = name
     
     @abstractmethod
     def encode(self, phase: Phase, index: int, offset=0) -> Iterable:
@@ -48,7 +50,8 @@ class Writer(ABC):
         
 class MultiDescretizer(Descretizer):
 
-    def __init__(self, descretizers: List[Descretizer]):
+    def __init__(self, name: str, descretizers: List[Descretizer]):
+        super().__init__(name)
         if not isinstance(descretizers, list):
             raise ValueError('Descretizers argument must be a list.')
         if len(descretizers) == 0:
@@ -73,8 +76,8 @@ class MultiDescretizer(Descretizer):
 
 class MultiSequentialDescritizer(MultiDescretizer):
     
-    def __init__(self, descretizers: List[Descretizer]):
-        super().__init__(descretizers)
+    def __init__(self, name: str, descretizers: List[Descretizer]):
+        super().__init__(name, descretizers)
         
     def encode(self, phase: Phase, index: int, offset=0):
         result = []
@@ -89,8 +92,8 @@ class MultiSequentialDescritizer(MultiDescretizer):
     
 class MultiParallelDescritizer(MultiDescretizer):
     
-    def __init__(self, descretizers: List[Descretizer]):
-        super().__init__(descretizers)
+    def __init__(self, name: str, descretizers: List[Descretizer]):
+        super().__init__(name, descretizers)
         
     def encode(self, phase: Phase, index: int, offset=0) -> Iterable:
         itemset = self.descretizers[0].encode(phase, index)
@@ -102,8 +105,8 @@ class MultiParallelDescritizer(MultiDescretizer):
     
 class EventDescretizer(Descretizer):
 
-    def __init__(self, events: List[str], event_types:Dict[str, List[str]] = None, event_column='type', event_type_sep='_') -> None:
-        super().__init__()
+    def __init__(self, name: str, events: List[str], event_types:Dict[str, List[str]] = None, event_column='type', event_type_sep='_') -> None:
+        super().__init__(name)
         self.all_event_to_index = dict()
         self.just_event_to_index = dict()
         self.event_type_sep = event_type_sep
@@ -154,17 +157,17 @@ class EventDescretizer(Descretizer):
 class LocationDescretizer(Descretizer):
 
     zone_to_index = {
-        "Left Flank": 1,
-        "Right Flank": 2,
-        "Own box": 3,
-        "Opposition box": 4,
-        "Midfield": 5
+        "Left Flank": 0,
+        "Right Flank": 1,
+        "Own box": 2,
+        "Opposition box": 3,
+        "Midfield": 4
     }
 
     index_to_zone = {value:key for key, value in zone_to_index.items()}
 
-    def __init__(self, max_length=120, max_width=80, flanks_width=18, arc_x=22, event_column='type', location_column='location') -> None:
-        super().__init__()
+    def __init__(self, name: str, max_length=120, max_width=80, flanks_width=18, arc_x=22, event_column='type', location_column='location') -> None:
+        super().__init__(name)
         self.flank1 = flanks_width
         self.flank2 = max_width - flanks_width
         self.arc1 = arc_x

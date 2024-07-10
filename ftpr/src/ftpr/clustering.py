@@ -115,7 +115,6 @@ class PhaseClustering:
         self._check_done()
         if metric not in ['shot', 'xg', 'goal']:
             raise ValueError("Metric value must be in ['shot', 'xg', 'goal'].")
-        n_clusters = len(self.labels_)
         cluster_scores = [0 for _ in range(self.n_clusters)]
         cluster_counts = [0 for _ in range(self.n_clusters)]
         for i, phase in enumerate(self.phases):
@@ -129,7 +128,7 @@ class PhaseClustering:
             elif metric == 'goal':
                 cluster_scores[cluster_id] += len(shot_df[shot_df['shot_outcome'] == 'Goal'])
         if avg:
-            result = [0 for _ in range(n_clusters)]
+            result = [0 for _ in range(self.n_clusters)]
             for i, count in enumerate(cluster_counts):
                 if count != 0:
                     result[i] = cluster_scores[i] / count

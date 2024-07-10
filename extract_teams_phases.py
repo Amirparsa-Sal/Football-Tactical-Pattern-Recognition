@@ -11,5 +11,6 @@ ext = PhaseExtractor(matches_df, './data/events_simplified')
 for team in teams:
     if os.path.exists(f'./data/team_phases/{team}.csv'):
         print(team, 'Passed!')
-    print(f'Extracting {team} data...')
-    ext.extract_phases(team, output_dir='./data/team_phases')
+    else:
+        print(f'Extracting {team} data...')
+        ext.extract_phases(team, output_dir='./data/team_phases')
