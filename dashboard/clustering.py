@@ -79,7 +79,7 @@ def on_patterns_button_click(index):
     save_config()
     
 @st.cache_data(max_entries=12, hash_funcs={PhaseClustering: hash_clustering})
-def plot_cluster(clustering: PhaseClustering, cluster_index: int, _best_cluster_indeces, visualization: str, ranking_metric: str):
+def plot_cluster(clustering: PhaseClustering, cluster_index: int, _best_cluster_indeces, visualization: str, ranking_metric: str, avg):
     series_in_cluster = clustering.get_cluster_series(_best_cluster_indeces[cluster_index])
     if visualization == 'Arrows':
         pitch = Pitch(pitch_type='statsbomb', pitch_color='#22312b', line_color='#c7d5cc')
@@ -142,9 +142,8 @@ def perform_clustering(type, team_name, n_clusters, min_phase_length, metric, no
     return clustering, cls_pred
 
 @st.cache_data(max_entries=1, hash_funcs={PhaseClustering: hash_clustering})
-def rank_clusters(clustering: PhaseClustering, metric):
-    # avg = metric == 'xg'
-    cluster_score = clustering.get_cluster_scores(metric=metric)
+def rank_clusters(clustering: PhaseClustering, metric, avg):
+    cluster_score = clustering.get_cluster_scores(metric=metric, avg=avg)
     best_cluster_indeces = np.argsort(cluster_score)[::-1]
     return cluster_score, best_cluster_indeces
 
@@ -175,14 +174,15 @@ if team_name:
         
         min_phase_length = create_slider('Min Length', min_range=1, max_range=10, default_value=3, session_key='min_phase_length')
 
-        metrics = ['dtw', 'softdtw', 'euclidean']
+        metrics = ['dtw', 'euclidean']
         metric = create_select_box('Metric', options=metrics, session_key='metric')
 
         normalized_list = ['min-max', 'z', 'No']
         normalized = create_select_box('Normalization', options=normalized_list, session_key='normalized')
 
-        ranking_metrics = ['Shot', 'xG', 'Goal']
+        ranking_metrics = ['Shot', 'xG', 'Goal', 'Length']
         ranking_metric = create_select_box('Ranking Metric', options=ranking_metrics, session_key='ranking_metric')
+        avg_metric = st.sidebar.checkbox('Average', value=False)
 
         num_batches = int((n_clusters / num_rows / num_cols) - 0.5) + 1
 
@@ -194,7 +194,7 @@ if team_name:
 
         # Clustering
         clustering, cls_pred = perform_clustering(type, team_name, n_clusters, min_phase_length, metric, normalized)
-        cluster_score, best_cluster_indeces = rank_clusters(clustering, ranking_metric.lower())
+        cluster_score, best_cluster_indeces = rank_clusters(clustering, ranking_metric.lower(), avg_metric)
         st.session_state['best_cluster_indeces'] = best_cluster_indeces
         batch_progress = st.progress((batch + 1) / num_batches, text = f'Cluster {batch + 1} / {num_batches}')
         
@@ -223,12 +223,12 @@ if team_name:
                     col1, col2 = st.columns([2, 1])             
                     index = batch * num_rows * num_cols + j * num_cols + (i - 1)
                     if index < n_clusters:
-                        fig, num_phases = plot_cluster(clustering, index, best_cluster_indeces, visualization=visualization, ranking_metric=ranking_metric)
+                        fig, num_phases = plot_cluster(clustering, index, best_cluster_indeces, visualization=visualization, ranking_metric=ranking_metric, avg=avg_metric)
                         with col1:
                             st.button(f'Num Phases: {num_phases}\n{ranking_metric}: {cluster_score[best_cluster_indeces[index]]}',
-                                key=f'button_{index}', on_click=on_cluster_button_click, args=(index,), use_container_width=True)
+                                key=f'button_{index}', on_click=on_cluster_button_click, args=(best_cluster_indeces[index],), use_container_width=True)
                         with col2:
-                            st.button('Patterns', key=f'temp_{index}', use_container_width=True, on_click=on_patterns_button_click, args=(index,))
+                            st.button('Patterns', key=f'temp_{best_cluster_indeces[index]}', use_container_width=True, on_click=on_patterns_button_click, args=(cluster_score[best_cluster_indeces[index]],))
                         st.pyplot(fig)
                     loading_progress.progress((j * num_cols + i) / (num_rows * num_cols))
         loading_progress.empty()
@@ -236,9 +236,8 @@ if team_name:
     elif st.session_state['mode'] == 'inspect':
         st.sidebar.empty()
         cluster_index = st.session_state['cluster_index']
-        best_cluster_indeces = st.session_state['best_cluster_indeces']
         clustering: PhaseClustering = st.session_state['clustering']
-        phases_in_cluster = clustering.get_cluster_phases(best_cluster_indeces[cluster_index])
+        phases_in_cluster = clustering.get_cluster_phases(cluster_index)
         
         phase_index = st.session_state['phase_index'] % len(phases_in_cluster)
         phase = phases_in_cluster[phase_index]
@@ -252,7 +251,7 @@ if team_name:
         
         col1, col2, col3 = st.columns([1, 10, 1])
 
-        series_in_cluster = clustering.get_cluster_series(best_cluster_indeces[cluster_index])
+        series_in_cluster = clustering.get_cluster_series(cluster_index)
 
         with col1:
             prev_button = st.button('<', use_container_width=True, disabled=False, on_click=on_prev_button_clicked)
@@ -276,9 +275,6 @@ if team_name:
         strategy = st.sidebar.selectbox('Representation Strategy', ['Sequential', 'Parallel'])
         support = st.sidebar.slider('Min Support(%)', 0, 100, 10)
         max_gap = st.sidebar.slider('Max Gap', 1, 50, 1, disabled=algorithm=='CM-SPADE')
-        
-        print(support)
-        print(max_gap)
         
         st.sidebar.button('Back to Main Page', on_click=on_back_to_menu_button_clicked)
         
@@ -307,9 +303,8 @@ if team_name:
             start_index += states_num
 
         cluster_index = st.session_state['cluster_index']
-        best_cluster_indeces = st.session_state['best_cluster_indeces']
         clustering: PhaseClustering = st.session_state['clustering']
-        phases_in_cluster = clustering.get_cluster_phases(best_cluster_indeces[cluster_index])
+        phases_in_cluster = clustering.get_cluster_phases(cluster_index)
         
         writer = CMSPADEWriter()
         writer.write(multi_desc.apply(phases_in_cluster, mode=strategy.casefold()), 'output.tmp')
@@ -319,8 +314,6 @@ if team_name:
             df = run_miner(algorithm="VMSP", input_filename="output.tmp", output_filename="output.txt", arguments=[f"{support}%", "100", f"{max_gap}"])
         else:
             df = run_miner(algorithm="CM-SPADE", input_filename="output.tmp", output_filename="output.txt", arguments=[f"{support}%"])
-        
-        print('Done')
         
         df['sup'] = df['sup'] / len(phases_in_cluster)
     
