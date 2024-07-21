@@ -5,7 +5,9 @@ import numpy as np
 from dtaidistance import dtw_ndim
 from dtaidistance.clustering.kmeans import KMeans
 from sklearn.cluster import AgglomerativeClustering
-from collections import Counter
+from tslearn.clustering import TimeSeriesKMeans
+from scipy.interpolate import interp1d
+
 
 class PhaseClustering:
 
@@ -96,16 +98,22 @@ class PhaseClustering:
     def kmeans_fit(self, n_clusters, metric, monitor_distances=None, **kwargs):
         # Validate the arguments
         self._check_metric(metric)
-
-        clustering = KMeans(n_clusters, **kwargs)
         series = self.normalized_series if self.normalized else self.series
-
-        cls_pred, _ = clustering.fit(series, use_c=True, monitor_distances=monitor_distances)
         
-        self.labels_ = [0 for _ in range(len(series))]
-        for cluster_id in cls_pred:
-            for phase_id in cls_pred[cluster_id]:
-                self.labels_[phase_id] = cluster_id
+        if metric == 'euclidean':
+            series = self._to_time_series_dataset(series)
+            series = series.reshape(len(series), -1)
+            clustering = TimeSeriesKMeans(n_clusters=n_clusters)
+            self.labels_ = clustering.fit_predict(series)
+        
+        elif metric == 'dtw':
+            clustering = KMeans(n_clusters, **kwargs)
+            cls_pred, _ = clustering.fit(series, use_c=True, monitor_distances=monitor_distances)
+        
+            self.labels_ = [0 for _ in range(len(series))]
+            for cluster_id in cls_pred:
+                for phase_id in cls_pred[cluster_id]:
+                    self.labels_[phase_id] = cluster_id
 
         self.done = True
         self.n_clusters = n_clusters
@@ -157,10 +165,28 @@ class PhaseClustering:
             if len(series) > max_length:
                 max_length = len(series)
 
-        result = np.zeros((len(dataset), max_length, n_features))
-        npad = [(0, 0)] * np.array(dataset[0]).ndim
-        for i, series in enumerate(dataset):
-            npad[0] = (0, max_length - len(series))
-            padded_series = np.pad(series, pad_width=npad, mode='edge')
-            result[i] = padded_series      
-        return result
+        # result = np.zeros((len(dataset), max_length, n_features))
+        # npad = [(0, 0)] * np.array(dataset[0]).ndim
+        # for i, series in enumerate(dataset):
+        #     npad[0] = (0, max_length - len(series))
+        #     padded_series = np.pad(series, pad_width=npad, mode='edge')
+        #     result[i] = padded_series      
+        # return result
+        return self._scale_all_2d_series(dataset, max_length)
+    
+    def _scale_2d_time_series(self, series, max_length):
+        time_steps, features = series.shape
+        original_indices = np.arange(time_steps)
+        target_indices = np.linspace(0, time_steps - 1, max_length)
+        
+        scaled_series = np.zeros((max_length, features))
+        
+        for i in range(features):
+            interpolator = interp1d(original_indices, series[:, i], kind='linear')
+            scaled_series[:, i] = interpolator(target_indices)
+        
+        return scaled_series
+
+    def _scale_all_2d_series(self, time_series_list, max_length):
+        scaled_series_list = [self._scale_2d_time_series(series, max_length) for series in time_series_list]
+        return np.array(scaled_series_list)
