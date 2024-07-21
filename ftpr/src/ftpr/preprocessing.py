@@ -5,7 +5,7 @@ import numpy as np
 from copy import deepcopy
 
 class PhaseExtractor:
-    DELAY_EVENTS = ['foul won', 'foul committed', 'injury stoppage', 'referee ball-drop', 'half end', 'half start', 'offside']
+    DELAY_EVENTS = ['foul won', 'foul committed', 'injury stoppage', 'referee ball-drop', 'half end', 'half start', 'offside', 'substitution']
 
     HAVING_BALL_EVENTS = [
         'carry', 'ball recovery', 'goal keeper', 'clearance',
@@ -19,7 +19,7 @@ class PhaseExtractor:
 
 
     IGNORE_EVENTS = [
-        'ball receipt*', 'camera on*', 'pressure', 'dribbled past', 'substitution', 'duel', 'bad behaviour',
+        'ball receipt*', 'camera on*', 'pressure', 'dribbled past', 'duel', 'bad behaviour',
         'player on', 'player off', 'shield', '50/50', 'starting xi', 'tactical shift', 'own goal for', 'own goal against'
     ]
 
