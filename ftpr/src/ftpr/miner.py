@@ -23,7 +23,10 @@ def find_patterns(df, query: str, pattern_col='pattern'):
                 indeces.append(i)
     return df.iloc[indeces]
 
-def rank_patterns(df, scores, mapping, min_length=1, ascending=False, pattern_col='pattern', sup_col='sup'):
+def rank_patterns(df, scores, mapping, mode, min_length=1, ascending=False, pattern_col='pattern', sup_col='sup'):
+    if mode not in ['Support', 'Custom']:
+        raise ValueError("The mode must be in ['support', 'custom']")
+    
     pattern_col_index = df.columns.get_loc(pattern_col)
     sup_col_index = df.columns.get_loc(sup_col)
     result = {"pattern": [], "translate": [], "score": []}
@@ -35,11 +38,15 @@ def rank_patterns(df, scores, mapping, min_length=1, ascending=False, pattern_co
         for itemset in pattern:
             splited = itemset.split(' ')
             translate.append(tuple(mapping[int(index)] for index in splited))
-            for index in splited:
-                if int(index) in scores:
-                    score += scores[int(index)]
-                count += 1
-        score = 0 if count < min_length else score / count * df.iloc[i, sup_col_index]
+            if mode != 'sup':
+                for index in splited:
+                    if int(index) in scores:
+                        score += scores[int(index)]
+                    count += 1
+        if mode == 'Support':
+            score = 0 if count < min_length else df.iloc[i, sup_col_index]
+        elif mode == 'Custom':
+            score = 0 if count < min_length else score / count * df.iloc[i, sup_col_index]
         # score = count * df.iloc[i, -1]
         result['pattern'].append(pattern)
         result['translate'].append(translate)

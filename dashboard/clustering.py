@@ -7,7 +7,7 @@ import streamlit as st
 from ftpr.visualization import PhaseVisualizer
 from ftpr.preprocessing import PhaseExtractor
 from ftpr.representation import EventDescretizer, LocationDescretizer, MultiSequentialDescritizer, MultiParallelDescritizer, CMSPADEWriter
-from ftpr.miner import find_patterns, rank_patterns, run_miner
+from ftpr.miner import rank_patterns, run_miner
 
 num_cols = 3
 num_rows = 4
@@ -275,6 +275,7 @@ if team_name:
         strategy = st.sidebar.selectbox('Representation Strategy', ['Sequential', 'Parallel'])
         support = st.sidebar.slider('Min Support(%)', 0, 100, 10)
         max_gap = st.sidebar.slider('Max Gap', 1, 50, 1, disabled=algorithm=='CM-SPADE')
+        ranking_metric = st.sidebar.selectbox('Ranking Metric', ['Support', 'Custom'])
         
         st.sidebar.button('Back to Main Page', on_click=on_back_to_menu_button_clicked)
         
@@ -289,18 +290,19 @@ if team_name:
         scores = {key:0.5 for key in mapping}
         start_index = 0
         
-        container = st.container(border=True)
-        for desc in all_descs:
-            states_num = desc.get_states_num()
-            expander = container.expander(desc.name.capitalize())
-            cols = expander.columns(4)
-            for i in range(0, states_num, len(cols)):
-                for j in range(len(cols)):
-                    if i + j < states_num:
-                        with cols[j]:
-                            scores[start_index + i + j] = create_slider(mapping[start_index + i + j], 0.0, 1.0,
-                                                                scores[start_index + i + j], session_key=mapping[start_index + i + j], container=st)
-            start_index += states_num
+        if ranking_metric == 'Custom':
+            container = st.container(border=True)
+            for desc in all_descs:
+                states_num = desc.get_states_num()
+                expander = container.expander(desc.name.capitalize())
+                cols = expander.columns(4)
+                for i in range(0, states_num, len(cols)):
+                    for j in range(len(cols)):
+                        if i + j < states_num:
+                            with cols[j]:
+                                scores[start_index + i + j] = create_slider(mapping[start_index + i + j], 0.0, 1.0,
+                                                                    scores[start_index + i + j], session_key=mapping[start_index + i + j], container=st)
+                start_index += states_num
 
         cluster_index = st.session_state['cluster_index']
         clustering: PhaseClustering = st.session_state['clustering']
@@ -317,6 +319,6 @@ if team_name:
         
         df['sup'] = df['sup'] / len(phases_in_cluster)
     
-        df = rank_patterns(df, scores, mapping)
+        df = rank_patterns(df, scores, mapping, ranking_metric)
         
         st.write(df)
