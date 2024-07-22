@@ -154,6 +154,35 @@ class EventDescretizer(Descretizer):
     def get_states_num(self) -> int:
         return len(self.index_to_event.keys())
     
+
+class PlayerDescretizer(Descretizer):
+
+    def __init__(self, name: str, players: List[str], player_column='player') -> None:
+        super().__init__(name)
+        self.player_to_index = dict()
+        for i, player in enumerate(players):
+            self.player_to_index[player] = i
+        self.player_column = player_column
+        self.players = players
+
+    def encode(self, phase: Phase, index: int, offset=0):
+        player = phase.iloc[index][self.player_column]
+        if player in self.players:
+            itemset = (self.player_to_index[player] + offset, )
+            return itemset
+        raise ValueError(f'Player ({player}) is not defined in players list.')
+    
+    def get_index(self, player: str):
+        if player not in self.player_to_index:
+            raise ValueError(f'Player ({player}) is not defined in players list.')
+        return self.player_to_index[player]
+
+    def get_decode_mapping(self, offset=0) -> int:
+        return {key+offset:value for key,value in enumerate(self.players)}
+    
+    def get_states_num(self) -> int:
+        return len(self.players)
+    
 class LocationDescretizer(Descretizer):
 
     zone_to_index = {

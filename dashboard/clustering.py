@@ -6,8 +6,10 @@ from ftpr.dataloader import load_phases
 import streamlit as st
 from ftpr.visualization import PhaseVisualizer
 from ftpr.preprocessing import PhaseExtractor
-from ftpr.representation import EventDescretizer, LocationDescretizer, MultiSequentialDescritizer, MultiParallelDescritizer, CMSPADEWriter
+from ftpr.representation import EventDescretizer, LocationDescretizer, MultiSequentialDescritizer, MultiParallelDescritizer, CMSPADEWriter, PlayerDescretizer
 from ftpr.miner import rank_patterns, run_miner
+import os
+import pickle 
 
 num_cols = 3
 num_rows = 4
@@ -33,10 +35,16 @@ events_config = {
     } 
 }
 
+players_data_dir = '../data/players'
 location_columns = ['location', 'pass_end_location', 'carry_end_location', 'shot_end_location']
 
 st.set_page_config(layout="wide") 
 
+@st.cache_data(max_entries=3)
+def load_players(team_name):
+    with open(os.path.join(players_data_dir, f'{team_name}.pkl'), 'rb') as f:
+        players = pickle.load(f)
+    return list(players)
 
 def create_select_box(name, options, default_value=None, session_key=None, container=st.sidebar):
     if session_key in st.session_state:
@@ -268,15 +276,16 @@ if team_name:
             
     elif st.session_state['mode'] == 'patterns':
         st.sidebar.empty()
-        
+        players = load_players(team_name)
         algorithm = st.sidebar.selectbox('Algorithm', ['VMSP', 'CM-SPADE'])
         include_events = st.sidebar.checkbox('Include Events', value=True)
         include_locations = st.sidebar.checkbox('Include Locations', value=True)
+        include_players = st.sidebar.checkbox('Include Players', value=True)
         strategy = st.sidebar.selectbox('Representation Strategy', ['Sequential', 'Parallel'])
         support = st.sidebar.slider('Min Support(%)', 0, 100, 10)
         max_gap = st.sidebar.slider('Max Gap', 1, 50, 1, disabled=algorithm=='CM-SPADE')
         ranking_metric = st.sidebar.selectbox('Ranking Metric', ['Support', 'Custom'])
-        
+        player_desc = PlayerDescretizer('players', players)
         st.sidebar.button('Back to Main Page', on_click=on_back_to_menu_button_clicked)
         
         all_descs = []
@@ -284,6 +293,8 @@ if team_name:
             all_descs.append(event_desc)
         if include_locations:
             all_descs.append(location_desc)
+        if include_players:
+            all_descs.append(player_desc)
         
         multi_desc = MultiParallelDescritizer('multi', all_descs) if strategy == 'Parallel' else MultiSequentialDescritizer('multi', all_descs)
         mapping = multi_desc.get_decode_mapping()
