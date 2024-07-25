@@ -58,15 +58,16 @@ def inertia(distance_matrix, cluster_indices):
     return fitness
 
 def create_and_save_plot(xs, ys, path, labels=None, title=None):
-    fig, ax = plt.subplots(nrows=1, ncols=1)
+    fig = plt.figure(figsize=(10, 15))
     for i, x in enumerate(xs):
         if labels:
-            plt.legend(loc='upper left')
-            ax.plot(x, ys[i], label=labels[i])
+            plt.plot(x, ys[i], label=labels[i])
         else:
-            ax.plot(x, ys[i])
+            plt.plot(x, ys[i])
     if title:
-        ax.set_title(title)
+        plt.title(title)
+    if labels:
+        plt.legend(loc='upper right')
     fig.savefig(path)
     plt.close(fig)
 
@@ -118,7 +119,10 @@ if __name__ == '__main__':
         raise ValueError(f'The input folder {args.input_dir} does not exist!')
     
     # get all pickle files in the folder
-    file_names = [f for f in os.listdir(args.input_dir) if f.endswith('.pkl')]
+    file_names = [f.split('.')[0][8:] for f in os.listdir(args.input_dir) if f.endswith('.pkl')]
+    assert len(file_names) > 0
+    n_parameters = len(file_names[0].split('_'))
+    parameters_values = [set() for _ in range(n_parameters)]
     
     if not os.path.exists(args.output_dir):
         os.mkdir(args.output_dir)
@@ -129,14 +133,15 @@ if __name__ == '__main__':
         f'silhouettes_in_top{args.top}_clusters': dict(),
         "inertias": dict(),
         "empty_clusters": dict(),
-        "average_num_data_in_clusters": dict(),
         "std_num_data_in_clusters": dict()
     }
     
     for name in file_names:
         print(f'{name}:')
-        exp_name = name.split('.')[0]
-        exp_out_dir = os.path.join(args.output_dir, exp_name)
+        parameters = name.split('_')
+        for i, p in enumerate(parameters):
+            parameters_values[i].add(p)
+        exp_out_dir = os.path.join(args.output_dir, name)
         
         if not os.path.exists(exp_out_dir):
             os.mkdir(exp_out_dir)
@@ -144,7 +149,7 @@ if __name__ == '__main__':
         if not os.path.exists(os.path.join(exp_out_dir, 'clusters_arrows')):
             os.mkdir(os.path.join(exp_out_dir, 'clusters_arrows'))
         # Read pickle file and series
-        clustering_data = load_pickle(os.path.join(args.input_dir, name))
+        clustering_data = load_pickle(os.path.join(args.input_dir, f'results_{name}.pkl'))
 
         if 'phase_clusterings' not in clustering_data or len(clustering_data['phase_clusterings']) == 0:
             raise ValueError('Clustering data does not contain any phase_clusterings object!')
@@ -165,7 +170,6 @@ if __name__ == '__main__':
         all_stats[f'silhouettes_in_top{args.top}_clusters'][name] = []
         all_stats['inertias'][name] = []
         all_stats['empty_clusters'][name] = []
-        all_stats['average_num_data_in_clusters'][name] = []
         all_stats['std_num_data_in_clusters'][name] = []
         print('Plotting Diagrams...')
         for i, clustering in enumerate(clustering_data['clusterings']):
@@ -176,7 +180,6 @@ if __name__ == '__main__':
             data_in_clusters = [0 for _ in range(clustering_data['n_clusters'][i])]
             for c in cls_pred:
                 data_in_clusters[c] += 1
-            all_stats['average_num_data_in_clusters'][name].append(np.mean(data_in_clusters))
             all_stats['std_num_data_in_clusters'][name].append(np.std(data_in_clusters))
             # empty clusters
             n_empty = 0
@@ -230,6 +233,7 @@ if __name__ == '__main__':
                                             color='#777777', ax=ax, width=1)
                     ax.set_title(f'#Phases: {len(series_in_cluster)} #Score: {best_clusters[best_clusters_indeces[idx]]}', fontsize=20, color='white')
             fig.savefig(os.path.join(exp_out_dir, 'clusters_arrows', f"{clustering_data['n_clusters'][i]}.png"))
+            plt.close('all')
             
         xs = clustering_data['n_clusters']
         
@@ -249,3 +253,25 @@ if __name__ == '__main__':
             
         create_and_save_plot(xss, ys, os.path.join(args.output_dir, f'{key}.png'), labels=labels, title=key)
     
+    # Create Study Plots
+    exp_names = [f.split('.')[0] for f in file_names]
+    for i, param_values in enumerate(parameters_values):
+        out_dir = os.path.join(args.output_dir, f'fixed_parameter{i}')
+        if not os.path.exists(out_dir):
+            os.mkdir(out_dir)
+        for value in param_values:
+            exps = [e for e in exp_names if e.split('_')[i] == value]
+            value_dir = os.path.join(out_dir, value)
+            if not os.path.exists(value_dir):
+                os.mkdir(value_dir)
+            xs = clustering_data['n_clusters']
+            xss = [xs for _ in range(len(exps))]
+    
+            for key in all_stats:
+                ys = []
+                labels = []
+                for e in exps:
+                    labels.append(e)
+                    ys.append(all_stats[key][e])
+                    
+                create_and_save_plot(xss, ys, os.path.join(value_dir, f'{key}.png'), labels=labels, title=key)
