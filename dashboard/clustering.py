@@ -10,6 +10,8 @@ from ftpr.representation import EventDescretizer, LocationDescretizer, MultiSequ
 from ftpr.miner import rank_patterns, run_miner
 import os
 import pickle 
+import multiprocessing
+import subprocess
 
 num_cols = 3
 num_rows = 4
@@ -40,6 +42,22 @@ location_columns = ['location', 'pass_end_location', 'carry_end_location', 'shot
 
 st.set_page_config(layout="wide") 
 
+def on_ranking_sliders_change():
+    st.session_state['no_mining'] = True
+    
+def on_pattern_mining_params_change():
+    if 'miner_process' in st.session_state   and st.session_state['miner_process']:
+        st.session_state['miner_process'].terminate()
+        print('terminated')
+        st.session_state['miner_process'].join()
+
+def run_miner_process(algorithm, input, output, args, queue):
+    try:
+        output = run_miner(algorithm, input, output, args)
+        queue.put(output)
+    except subprocess.CalledProcessError as e:
+        queue.put(f"Subprocess failed with error: {e.output.decode()}")
+    
 @st.cache_data(max_entries=3)
 def load_players(team_name):
     with open(os.path.join(players_data_dir, f'{team_name}.pkl'), 'rb') as f:
@@ -53,11 +71,13 @@ def create_select_box(name, options, default_value=None, session_key=None, conta
         index = options.index(default_value) if default_value else 0
     return container.selectbox(name, options, index=index, key=session_key)
 
-def create_slider(name, min_range, max_range, default_value, session_key=None, container=st.sidebar):
+def create_slider(name, min_range, max_range, default_value, session_key=None, container=st.sidebar, onchange=None):
     if session_key in st.session_state:
         value = st.session_state[session_key]
     else:
         value = default_value
+    if onchange:
+        return container.slider(name, min_range, max_range, value=value, key=session_key, on_change=onchange)    
     return container.slider(name, min_range, max_range, value=value, key=session_key)
 
 def hash_clustering(obj: PhaseClustering):
@@ -145,7 +165,7 @@ def perform_clustering(type, team_name, n_clusters, min_phase_length, metric, no
     if type == 'Agglomerative':
         cls_pred = clustering.agglomerative_fit(n_clusters, metric, linkage='complete')
     else:
-        cls_pred = clustering.kmeans_fit(n_clusters, metric, show_progress=False)
+        cls_pred = clustering.kmeans_fit(n_clusters, metric, show_progress=True)
 
     return clustering, cls_pred
 
@@ -208,7 +228,7 @@ if team_name:
         
         cols = st.columns([1, 3 * num_cols - 2, 1])
         
-        st.sidebar.markdown('## Visualization')
+        # st.sidebar.markdown('## Visualization')
         visualization = 1
         
         visualization_list = ['Heatmap', 'Arrows']
@@ -236,7 +256,7 @@ if team_name:
                             st.button(f'Num Phases: {num_phases}\n{ranking_metric}: {cluster_score[best_cluster_indeces[index]]}',
                                 key=f'button_{index}', on_click=on_cluster_button_click, args=(best_cluster_indeces[index],), use_container_width=True)
                         with col2:
-                            st.button('Patterns', key=f'temp_{best_cluster_indeces[index]}', use_container_width=True, on_click=on_patterns_button_click, args=(cluster_score[best_cluster_indeces[index]],))
+                            st.button('Patterns', key=f'temp_{best_cluster_indeces[index]}', use_container_width=True, on_click=on_patterns_button_click, args=(best_cluster_indeces[index],))
                         st.pyplot(fig)
                     loading_progress.progress((j * num_cols + i) / (num_rows * num_cols))
         loading_progress.empty()
@@ -253,19 +273,21 @@ if team_name:
         
         st.button('Back to Main Page', on_click=on_back_to_menu_button_clicked)
         first_row = phase.iloc[0]
-        st.markdown(f'Phase ID: {first_row["phase_id"]}')
-        st.markdown(f'Phase UUID: {first_row["id"]}')
-        st.markdown(f'Match ID: {first_row["match_id"]}')
+        # st.markdown(f'Phase ID: {first_row["phase_id"]}')
+        # st.markdown(f'Phase UUID: {first_row["id"]}')
+        # st.markdown(f'Match ID: {first_row["match_id"]}')
         
-        col1, col2, col3 = st.columns([1, 10, 1])
+        batch_progress = st.progress((phase_index + 1) / len(phases_in_cluster), text = f'Phase {phase_index + 1} / {len(phases_in_cluster)}')
+        
+        col1, col2, col3 = st.columns([1, 7, 1])
 
         series_in_cluster = clustering.get_cluster_series(cluster_index)
 
         with col1:
-            prev_button = st.button('<', use_container_width=True, disabled=False, on_click=on_prev_button_clicked)
+            prev_button = st.button('Prev', use_container_width=True, disabled=False, on_click=on_prev_button_clicked)
         
         with col3:
-            next_button = st.button('>', use_container_width=True, disabled=False, on_click=on_next_button_clicked)
+            next_button = st.button('Next', use_container_width=True, disabled=False, on_click=on_next_button_clicked)
 
         with col2:
             visualizer = PhaseVisualizer(figsize=(16, 11))
@@ -277,14 +299,14 @@ if team_name:
     elif st.session_state['mode'] == 'patterns':
         st.sidebar.empty()
         players = load_players(team_name)
-        algorithm = st.sidebar.selectbox('Algorithm', ['VMSP', 'CM-SPADE'])
-        include_events = st.sidebar.checkbox('Include Events', value=True)
-        include_locations = st.sidebar.checkbox('Include Locations', value=True)
-        include_players = st.sidebar.checkbox('Include Players', value=True)
-        strategy = st.sidebar.selectbox('Representation Strategy', ['Sequential', 'Parallel'])
-        support = st.sidebar.slider('Min Support(%)', 0, 100, 10)
-        max_gap = st.sidebar.slider('Max Gap', 1, 50, 1, disabled=algorithm=='CM-SPADE')
-        ranking_metric = st.sidebar.selectbox('Ranking Metric', ['Support', 'Custom'])
+        algorithm = st.sidebar.selectbox('Algorithm', ['VMSP', 'CM-SPADE'], on_change=on_pattern_mining_params_change)
+        include_events = st.sidebar.checkbox('Include Events', value=True, on_change=on_pattern_mining_params_change)
+        include_locations = st.sidebar.checkbox('Include Locations', value=True, on_change=on_pattern_mining_params_change)
+        include_players = st.sidebar.checkbox('Include Players', value=True, on_change=on_pattern_mining_params_change)
+        # strategy = st.sidebar.selectbox('Representation Strategy', ['Sequential', 'Parallel'])
+        support = st.sidebar.slider('Min Support(%)', 0, 100, 10, on_change=on_pattern_mining_params_change)
+        max_gap = st.sidebar.slider('Max Gap', 1, 50, 1, disabled=algorithm=='CM-SPADE', on_change=on_pattern_mining_params_change)
+        ranking_metric = st.sidebar.selectbox('Ranking Metric', ['Custom', 'Support'], on_change=on_pattern_mining_params_change)
         player_desc = PlayerDescretizer('players', players)
         st.sidebar.button('Back to Main Page', on_click=on_back_to_menu_button_clicked)
         
@@ -296,7 +318,9 @@ if team_name:
         if include_players:
             all_descs.append(player_desc)
         
-        multi_desc = MultiParallelDescritizer('multi', all_descs) if strategy == 'Parallel' else MultiSequentialDescritizer('multi', all_descs)
+        # multi_desc = MultiParallelDescritizer('multi', all_descs) if strategy == 'Parallel' else MultiSequentialDescritizer('multi', all_descs)
+        multi_desc = MultiParallelDescritizer('multi', all_descs)
+        
         mapping = multi_desc.get_decode_mapping()
         scores = {key:0.5 for key in mapping}
         start_index = 0
@@ -312,7 +336,8 @@ if team_name:
                         if i + j < states_num:
                             with cols[j]:
                                 scores[start_index + i + j] = create_slider(mapping[start_index + i + j], 0.0, 1.0,
-                                                                    scores[start_index + i + j], session_key=mapping[start_index + i + j], container=st)
+                                                                    scores[start_index + i + j], session_key=mapping[start_index + i + j], container=st,
+                                                                    onchange=on_ranking_sliders_change)
                 start_index += states_num
 
         cluster_index = st.session_state['cluster_index']
@@ -320,16 +345,41 @@ if team_name:
         phases_in_cluster = clustering.get_cluster_phases(cluster_index)
         
         writer = CMSPADEWriter()
-        writer.write(multi_desc.apply(phases_in_cluster, mode=strategy.casefold()), 'output.tmp')
+        # writer.write(multi_desc.apply(phases_in_cluster, mode=strategy.casefold()), 'output.tmp')
+        writer.write(multi_desc.apply(phases_in_cluster, mode='parallel'), 'output.tmp')
         
         df = None
-        if algorithm == 'VMSP':
-            df = run_miner(algorithm="VMSP", input_filename="output.tmp", output_filename="output.txt", arguments=[f"{support}%", "100", f"{max_gap}"])
+        args = None
+        result_queue = multiprocessing.Queue()
+
+        if 'no_mining' not in st.session_state:
+            if algorithm == 'VMSP':
+                # df = run_miner(algorithm="VMSP", input_filename="output.tmp", output_filename="output.txt", arguments=[f"{support}%", "100", f"{max_gap}"])
+                args = ("VMSP", "output.tmp", "output.txt", [f"{support}%", "100", f"{max_gap}"], result_queue)
+
+            else:
+                args = ("CM-SPADE", "output.tmp", "output.txt", [f"{support}%"], result_queue)
+                # df = run_miner(algorithm="CM-SPADE", input_filename="output.tmp", output_filename="output.txt", arguments=[f"{support}%"])
+
+            miner_process = multiprocessing.Process(target=run_miner_process, args=args)
+            st.session_state['miner_process'] = miner_process
+            miner_process.start()
+            print(miner_process.pid)
+            df = result_queue.get()
+            print('Process Started')
+            miner_process.join()
+            df['sup'] = df['sup'] / len(phases_in_cluster)
+            print('returned from process')
+            
+            del st.session_state['miner_process']
+            print('Got Output')
         else:
-            df = run_miner(algorithm="CM-SPADE", input_filename="output.tmp", output_filename="output.txt", arguments=[f"{support}%"])
+            df = st.session_state['miner_df']
+            del st.session_state['no_mining']
         
-        df['sup'] = df['sup'] / len(phases_in_cluster)
-    
+        st.session_state['miner_df'] = df.copy()
+        
+        print('Ranking Patterns...')
         df = rank_patterns(df, scores, mapping, ranking_metric)
         
         st.write(df)
