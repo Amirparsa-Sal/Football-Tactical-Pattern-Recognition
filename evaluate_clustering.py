@@ -57,17 +57,18 @@ def inertia(distance_matrix, cluster_indices):
 
     return fitness
 
-def create_and_save_plot(xs, ys, path, labels=None, title=None):
-    fig = plt.figure(figsize=(10, 15))
+def create_and_save_plot(xs, ys, path, labels=None, title=None, xlabel=None, ylabel=None):
+    fig = plt.figure(figsize=(10, 10))
     for i, x in enumerate(xs):
         if labels:
             plt.plot(x, ys[i], label=labels[i])
         else:
             plt.plot(x, ys[i])
-    if title:
-        plt.title(title)
     if labels:
         plt.legend(loc='upper right')
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
     fig.savefig(path)
     plt.close(fig)
 
@@ -128,12 +129,12 @@ if __name__ == '__main__':
         os.mkdir(args.output_dir)
 
     all_stats = {
-        "silhouettes_avg": dict(),
-        f'top{args.top}-silhouettes': dict(),
-        f'silhouettes_in_top{args.top}_clusters': dict(),
-        "inertias": dict(),
-        "empty_clusters": dict(),
-        "std_num_data_in_clusters": dict()
+        "Average Silhouette": dict(),
+        f'Average Top {args.top} Silhouettes': dict(),
+        f'Average Silhouettes in Top {args.top} Clusters': dict(),
+        "Average Coherence-Seperation": dict(),
+        "Number of Empty Clusters": dict(),
+        "Standard Deviation of Number of Datapoints in Clusters": dict()
     }
     
     for name in file_names:
@@ -165,12 +166,12 @@ if __name__ == '__main__':
         distances = distance_matrix_fast(series)
         
         # Average Silhouette Diagram with respect to n_clusters
-        all_stats['silhouettes_avg'][name] = []
-        all_stats[f'top{args.top}-silhouettes'][name] = []
-        all_stats[f'silhouettes_in_top{args.top}_clusters'][name] = []
-        all_stats['inertias'][name] = []
-        all_stats['empty_clusters'][name] = []
-        all_stats['std_num_data_in_clusters'][name] = []
+        all_stats['Average Silhouette'][name] = []
+        all_stats[f'Average Top {args.top} Silhouettes'][name] = []
+        all_stats[f'Average Silhouettes in Top {args.top} Clusters'][name] = []
+        all_stats['Average Coherence-Seperation'][name] = []
+        all_stats['Number of Empty Clusters'][name] = []
+        all_stats['Standard Deviation of Number of Datapoints in Clusters'][name] = []
         print('Plotting Diagrams...')
         for i, clustering in enumerate(clustering_data['clusterings']):
             cls_pred = clustering_data['cls_preds'][i]
@@ -180,19 +181,19 @@ if __name__ == '__main__':
             data_in_clusters = [0 for _ in range(clustering_data['n_clusters'][i])]
             for c in cls_pred:
                 data_in_clusters[c] += 1
-            all_stats['std_num_data_in_clusters'][name].append(np.std(data_in_clusters))
+            all_stats['Standard Deviation of Number of Datapoints in Clusters'][name].append(np.std(data_in_clusters))
             # empty clusters
             n_empty = 0
             for j in range(clustering_data['n_clusters'][i]):
                 if j not in cls_pred:
                     n_empty += 1
-            all_stats['empty_clusters'][name].append(n_empty)
+            all_stats['Number of Empty Clusters'][name].append(n_empty)
             #
             # inertia
-            all_stats['inertias'][name].append(inertia(distances, cls_pred))
+            all_stats['Average Coherence-Seperation'][name].append(inertia(distances, cls_pred))
             # silhouette
             scores = silhouette_samples(distances, cls_pred, metric='precomputed')
-            all_stats['silhouettes_avg'][name].append(np.average(scores))
+            all_stats['Average Silhouette'][name].append(np.average(scores))
             # top-k silhoeuutes and silhouette in top-k
             n_clusters = min(args.top, clustering_data['n_clusters'][i])
             best_clusters = phase_clustering.get_cluster_scores()
@@ -204,7 +205,7 @@ if __name__ == '__main__':
             for info in silhouette_info[:n_clusters]:
                 count_avg += len(info[1])
                 s_avg += info[2] * len(info[1])
-            all_stats[f'top{args.top}-silhouettes'][name].append(s_avg / count_avg)
+            all_stats[f'Average Top {args.top} Silhouettes'][name].append(s_avg / count_avg)
             # silhouette in top-k
             s_topk = 0
             count_topk = 0
@@ -212,7 +213,7 @@ if __name__ == '__main__':
                 if info[0] in best_clusters_indeces:
                     count_topk += len(info[1])
                     s_topk += info[2] * len(info[1])
-            all_stats[f'silhouettes_in_top{args.top}_clusters'][name].append(s_topk / count_topk)
+            all_stats[f'Average Silhouettes in Top {args.top} Clusters'][name].append(s_topk / count_topk)
             
             # Subplots for top-k clusters (for each n_clusters)
             pitch = Pitch(pitch_type='statsbomb', pitch_color='#22312b', line_color='#c7d5cc')
@@ -237,8 +238,8 @@ if __name__ == '__main__':
             
         xs = clustering_data['n_clusters']
         
-        for key in all_stats:
-            create_and_save_plot([xs], [all_stats[key][name]], os.path.join(exp_out_dir, f'{key}.png'), title=key)
+        # for key in all_stats:
+        #     create_and_save_plot([xs], [all_stats[key][name]], os.path.join(exp_out_dir, f'{key}.png'), title=key)
         
     # Create comparison plots
     xs = clustering_data['n_clusters']
@@ -251,27 +252,27 @@ if __name__ == '__main__':
             labels.append(name)
             ys.append(stat)
             
-        create_and_save_plot(xss, ys, os.path.join(args.output_dir, f'{key}.png'), labels=labels, title=key)
+        create_and_save_plot(xss, ys, os.path.join(args.output_dir, f'{key}.png'), labels=labels, ylabel=key, xlabel='Num Clusters')
     
     # Create Study Plots
-    exp_names = [f.split('.')[0] for f in file_names]
-    for i, param_values in enumerate(parameters_values):
-        out_dir = os.path.join(args.output_dir, f'fixed_parameter{i}')
-        if not os.path.exists(out_dir):
-            os.mkdir(out_dir)
-        for value in param_values:
-            exps = [e for e in exp_names if e.split('_')[i] == value]
-            value_dir = os.path.join(out_dir, value)
-            if not os.path.exists(value_dir):
-                os.mkdir(value_dir)
-            xs = clustering_data['n_clusters']
-            xss = [xs for _ in range(len(exps))]
+    # exp_names = [f.split('.')[0] for f in file_names]
+    # for i, param_values in enumerate(parameters_values):
+    #     out_dir = os.path.join(args.output_dir, f'fixed_parameter{i}')
+    #     if not os.path.exists(out_dir):
+    #         os.mkdir(out_dir)
+    #     for value in param_values:
+    #         exps = [e for e in exp_names if e.split('_')[i] == value]
+    #         value_dir = os.path.join(out_dir, value)
+    #         if not os.path.exists(value_dir):
+    #             os.mkdir(value_dir)
+    #         xs = clustering_data['n_clusters']
+    #         xss = [xs for _ in range(len(exps))]
     
-            for key in all_stats:
-                ys = []
-                labels = []
-                for e in exps:
-                    labels.append(e)
-                    ys.append(all_stats[key][e])
+    #         for key in all_stats:
+    #             ys = []
+    #             labels = []
+    #             for e in exps:
+    #                 labels.append(e)
+    #                 ys.append(all_stats[key][e])
                     
-                create_and_save_plot(xss, ys, os.path.join(value_dir, f'{key}.png'), labels=labels, title=key)
+    #             create_and_save_plot(xss, ys, os.path.join(value_dir, f'{key}.png'), labels=labels, title=key)
