@@ -163,3 +163,13 @@ data/events
 data/events_simplified
 team_phases
 .DS_STORE
+*.pkl
+exp/
+exp-result/
+exp-result1/
+exp-result-main-prev/
+exp_full/
+*.jar
+*.txt
+*.tmp
+test.py
