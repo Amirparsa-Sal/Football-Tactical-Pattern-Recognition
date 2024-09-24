@@ -253,26 +253,3 @@ if __name__ == '__main__':
             ys.append(stat)
             
         create_and_save_plot(xss, ys, os.path.join(args.output_dir, f'{key}.png'), labels=labels, ylabel=key, xlabel='Num Clusters')
-    
-    # Create Study Plots
-    # exp_names = [f.split('.')[0] for f in file_names]
-    # for i, param_values in enumerate(parameters_values):
-    #     out_dir = os.path.join(args.output_dir, f'fixed_parameter{i}')
-    #     if not os.path.exists(out_dir):
-    #         os.mkdir(out_dir)
-    #     for value in param_values:
-    #         exps = [e for e in exp_names if e.split('_')[i] == value]
-    #         value_dir = os.path.join(out_dir, value)
-    #         if not os.path.exists(value_dir):
-    #             os.mkdir(value_dir)
-    #         xs = clustering_data['n_clusters']
-    #         xss = [xs for _ in range(len(exps))]
-    
-    #         for key in all_stats:
-    #             ys = []
-    #             labels = []
-    #             for e in exps:
-    #                 labels.append(e)
-    #                 ys.append(all_stats[key][e])
-                    
-    #             create_and_save_plot(xss, ys, os.path.join(value_dir, f'{key}.png'), labels=labels, title=key)
