@@ -19,13 +19,18 @@ parser.add_argument('--rows', type=int, default=4)
 parser.add_argument('--cols', type=int, default=3)
 parser.add_argument('--players-path', type=str, default=os.path.join('..', 'data', 'players.pkl'))
 parser.add_argument('--matches-path', type=str, default=os.path.join('..', 'data', 'matches.csv'))
-args = parser.parse_args()
+parser.add_argument('--spmf-dir', type=str, default='..')
+cli_args = parser.parse_args()
 
-num_cols = args.cols
-num_rows = args.rows
+assert os.path.exists(cli_args.players_path), f"Players .pkl file not found in path. Please use --players-path argument to specify it."
+assert os.path.exists(cli_args.matches_path), f"Matches .csv file not found in path. Please use --matches-path argument to specify it."
+assert os.path.exists(os.path.join(cli_args.spmf_dir, 'spmf.jar')), f"spmf.jar executable file not found in path. Please use --spmf-dir argument to specify it."
 
-players_data_path = args.players_path
-matches_df_path = args.matches_path
+num_cols = cli_args.cols
+num_rows = cli_args.rows
+
+players_data_path = cli_args.players_path
+matches_df_path = cli_args.matches_path
 
 location_columns = ['location', 'pass_end_location', 'carry_end_location', 'shot_end_location']
 
@@ -65,14 +70,14 @@ def on_pattern_mining_params_change():
 
 def run_miner_process(algorithm, input, output, args, queue):
     try:
-        output = run_miner(algorithm, input, output, args)
+        output = run_miner(algorithm, input, output, args, spmf_executable_dir=cli_args.spmf_dir)
         queue.put(output)
     except subprocess.CalledProcessError as e:
         queue.put(f"Subprocess failed with error: {e.output.decode()}")
     
 @st.cache_data(max_entries=3)
 def load_players(team_name):
-    with open(os.path.join(players_data_path, f'{team_name}.pkl'), 'rb') as f:
+    with open(os.path.join(players_data_path), 'rb') as f:
         players = pickle.load(f)
     return list(players[team_name])
 

@@ -2,9 +2,9 @@ from spmf import Spmf
 from typing import List
 import pandas as pd
 
-def run_miner(algorithm: str, input_filename: str, output_filename: str, arguments: List[str], pickle=False, csv_filename=None, ascending=False):
+def run_miner(algorithm: str, input_filename: str, output_filename: str, arguments: List[str], spmf_executable_dir='.', pickle=False, csv_filename=None, ascending=False):
     spmf = Spmf(algorithm_name=algorithm, input_filename=input_filename, 
-                output_filename=output_filename, arguments=arguments)
+                output_filename=output_filename, arguments=arguments, spmf_bin_location_dir=spmf_executable_dir)
     spmf.run()
     df = spmf.to_pandas_dataframe(pickle=pickle)
     df = df.sort_values(by='sup', ascending=ascending)
