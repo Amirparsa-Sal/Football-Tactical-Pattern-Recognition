@@ -66,7 +66,6 @@ if __name__ == '__main__':
     phase_clustering = PhaseClustering(phases, normalize_series=args.norm)
     distances = distance_matrix_fast(phase_clustering.series)
     
-    phase_clusterings = []
     clusterings = []
     cls_preds = []
     inertias = []
@@ -76,21 +75,19 @@ if __name__ == '__main__':
             print(f'Starting with {n_clusters} clusters...')
             cls_pred, clustering = phase_clustering.kmeans_fit(n_clusters=n_clusters, metric=args.metric, monitor_distances=monitor_distance, show_progress=True)    
             clusterings.append(clustering)
-            phase_clusterings.append(deepcopy(phase_clustering))
             cls_preds.append(cls_pred)
 
     else:
         for n_clusters in tqdm(range(args.start, args.end + 1, args.step)):
             cls_pred, clustering = phase_clustering.agglomerative_fit(n_clusters=n_clusters, metric=args.metric)  
             clusterings.append(clustering)
-            phase_clusterings.append(deepcopy(phase_clustering))
             cls_preds.append(cls_pred)
     
     
     result_dict = {
         'n_clusters': list(range(args.start, args.end + 1, args.step)),
         'clusterings': clusterings,
-        'phase_clusterings': phase_clusterings,
+        'phase_clusterings': [phase_clustering],
         'cls_preds': cls_preds,
     }
 
