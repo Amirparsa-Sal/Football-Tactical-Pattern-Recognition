@@ -12,9 +12,24 @@ import os
 import pickle 
 import multiprocessing
 import subprocess
+import argparse
 
-num_cols = 3
-num_rows = 4
+parser = argparse.ArgumentParser()
+parser.add_argument('--rows', type=int, default=4)
+parser.add_argument('--cols', type=int, default=3)
+parser.add_argument('--players-path', type=str, default=os.path.join('..', 'data', 'players.pkl'))
+parser.add_argument('--matches-path', type=str, default=os.path.join('..', 'data', 'matches.csv'))
+args = parser.parse_args()
+
+num_cols = args.cols
+num_rows = args.rows
+
+players_data_path = args.players_path
+matches_df_path = args.matches_path
+
+location_columns = ['location', 'pass_end_location', 'carry_end_location', 'shot_end_location']
+
+
 bins = (120 // 4, 80 // 4)
 
 event_types = {
@@ -37,9 +52,6 @@ events_config = {
     } 
 }
 
-players_data_dir = '../data/players'
-location_columns = ['location', 'pass_end_location', 'carry_end_location', 'shot_end_location']
-
 st.set_page_config(layout="wide") 
 
 def on_ranking_sliders_change():
@@ -60,9 +72,9 @@ def run_miner_process(algorithm, input, output, args, queue):
     
 @st.cache_data(max_entries=3)
 def load_players(team_name):
-    with open(os.path.join(players_data_dir, f'{team_name}.pkl'), 'rb') as f:
+    with open(os.path.join(players_data_path, f'{team_name}.pkl'), 'rb') as f:
         players = pickle.load(f)
-    return list(players)
+    return list(players[team_name])
 
 def create_select_box(name, options, default_value=None, session_key=None, container=st.sidebar):
     if session_key in st.session_state:
@@ -175,10 +187,8 @@ def rank_clusters(clustering: PhaseClustering, metric, avg):
     best_cluster_indeces = np.argsort(cluster_score)[::-1]
     return cluster_score, best_cluster_indeces
 
-matches_df_dir = '../data/matches.csv'
-
 # Extract Team names
-matches_df = pd.read_csv(matches_df_dir)
+matches_df = pd.read_csv(matches_df_path)
 matches_df = matches_df.sort_values('match_date')
 all_teams = list(matches_df['home_team'].unique())
 all_teams.sort()
