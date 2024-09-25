@@ -7,6 +7,14 @@ import os
 from ftpr.entities import Phase
 from ftpr.visualization import PhaseVisualizer
 from collections import Counter
+import argparse
+
+st.set_page_config(layout="wide") 
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--matches-path', type=str, default=os.path.join('..', 'data', 'matches.csv'))
+parser.add_argument('--phases-dir', type=str, default=os.path.join('..', 'data', 'team_phases'))
+cli_args = parser.parse_args()
 
 events_config = {
     'Pass': {
@@ -23,8 +31,8 @@ events_config = {
 
 location_columns = ['location', 'pass_end_location', 'carry_end_location', 'shot_end_location']
 
-data_dir = '../data/team_phases/'
-matches_df_dir = '../data/matches.csv'
+data_dir = cli_args.phases_dir
+matches_df_dir = cli_args.matches_path
 
 matches_df = pd.read_csv(matches_df_dir)
 matches_df = matches_df.sort_values('match_date')
