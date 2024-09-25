@@ -53,12 +53,14 @@ selected_columns = [
 parser = argparse.ArgumentParser()
 parser.add_argument('--data-dir', type=str, default=os.path.join('..', 'data'))
 parser.add_argument('--events-dir', type=str, default='simplified_events')
+parser.add_argument('--competition-id', type=int, default=2)
+parser.add_argument('--season-id', type=int, default=27)
 args = parser.parse_args()
 
 data_dir = args.data_dir
 events_dir_name = args.events_dir
 
-matches_df = sb.matches(competition_id=2, season_id=27)
+matches_df = sb.matches(competition_id=args.competition_id, season_id=args.season_id)
 
 if not os.path.exists(data_dir):
     os.mkdir(data_dir)
