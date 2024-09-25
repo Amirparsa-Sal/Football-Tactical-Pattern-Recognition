@@ -1,11 +1,9 @@
 # Football-Tactical-Pattern-Recognition
 ### Introduction
 
-This project is part of a Bachelor of Science (B.Sc) thesis, aimed at leveraging data mining techniques to analyze football tactics. With the growing availability of sports data, particularly in football, automated tools are increasingly important for analyzing various game aspects.
+This project is part of my Bachelor of Science (B.Sc) thesis, aimed at leveraging data mining techniques to analyze football tactics. 
 
-In this comparison-based study, we developed a system to detect offensive tactical patterns used by football teams. The system processes event-based football data, breaking it down into phases that are clustered based on spatial characteristics. The clustering is performed using the K-means algorithm combined with the Dynamic Time Warping (DTW) distance measure, which was found to be the most effective combination for clustering sequences.
-
-After clustering, the phases are analyzed using pattern mining techniques. The Vertical Maximal Sequential Pattern (VMSP) algorithm is employed to extract frequently occurring patterns, which are then ranked by relevance.
+With the growing availability of sports data, particularly in football, automated tools are increasingly important for analyzing various game aspects. In this comparison-based study, I developed a system to detect offensive tactical patterns used by football teams. The system processes event-based football data, breaking it down into phases that are clustered based on spatial characteristics. The clustering is performed using the K-means algorithm combined with the Dynamic Time Warping (DTW) distance measure, which was found to be the most effective combination for clustering sequences. After clustering, the phases are analyzed using pattern mining techniques. The Vertical Maximal Sequential Pattern (VMSP) algorithm is employed to extract frequently occurring patterns, which are then ranked by relevance.
 
 A **visual dashboard** is included in the project, allowing users to interactively explore the results. Users can select different algorithms for each component of the system, including clustering and pattern mining, enabling a flexible comparison of different methods and their outcomes.
 
@@ -17,21 +15,18 @@ The **FTPR** (Football Tactical Pattern Recognition) package is a core component
 
 **Key Features:**
 
-• **Preprocessing**: The package provides utilities for transforming raw football event data into structured formats, segmenting it into phases for deeper analysis.
+* **Preprocessing**: The package provides utilities for transforming raw football event data into structured formats, segmenting it into phases for deeper analysis.
+  
+* **Clustering**: Multiple clustering algorithms with different distance functions are supported, including:
+  - **K-means** combined with the **Dynamic Time Warping (DTW)** distance measure, for grouping phases based on spatial and temporal characteristics.
+  - **Agglomerative Hierarchical Clustering**, which allows for grouping phases in a tree-like structure, providing a different approach to discovering similarities between sequences.
+  
+* **Pattern Mining**: The package implements pattern mining techniques to detect frequent tactical sequences, with support for:
+  - **Vertical Maximal Sequential Pattern (VMSP)**, an efficient algorithm for finding maximal frequent sequential patterns allowing to find a compact representation of tactics.
+  - **CM-SPADE**, a highly efficient algorithm for mining frequent sequences, offering another option for users to extract meaningful tactical patterns from football data.
 
-• **Clustering**: Multiple clustering algorithms with different distance functions are supported, including:
-
-• **K-means** combined with the **Dynamic Time Warping (DTW)** distance measure, for grouping phases based on spatial and temporal characteristics.
-
-• **Agglomerative Hierarchical Clustering**, which allows for grouping phases in a tree-like structure, providing a different approach to discovering similarities between sequences.
-
-• **Pattern Mining**: The package implements pattern mining techniques to detect frequent tactical sequences, with support for:
-
-• **Vertical Maximal Sequential Pattern (VMSP)**, an efficient algorithm for finding maximal frequent sequential patterns allowing to find a compact representation of tactics.
-
-• **CM-SPADE**, a highly efficient algorithm for mining frequent sequences, offering another option for users to extract meaningful tactical patterns from football data.
-
-• **Visualization**: FTPR includes visualization tools to represent clustering results and mined patterns, facilitating a clearer understanding of tactical insights.
+* **Visualization**: FTPR includes visualization tools to represent clustering results and mined patterns, facilitating a clearer understanding of tactical insights.
+						
 
 ### Installation
 
