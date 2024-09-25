@@ -51,7 +51,7 @@ selected_columns = [
 ]
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data-dir', type=str, default=os.path.join('..', 'data'))
+parser.add_argument('--data-dir', type=str, default='data')
 parser.add_argument('--events-dir', type=str, default='simplified_events')
 parser.add_argument('--competition-id', type=int, default=2)
 parser.add_argument('--season-id', type=int, default=27)
